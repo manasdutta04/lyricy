@@ -1,0 +1,223 @@
+import { describe, expect, it } from 'vitest';
+import type { VideoDetails } from './lyrics/types';
+import { findLyrics, withMusicCard } from './pipeline';
+import type { LrclibRecord } from './providers/lrclib';
+
+const VIDEO: VideoDetails = {
+  videoId: '-eQEFtrOpNw',
+  title: 'Rama Rama - Rishab Rikhiram Sharma (Official Music Video) | Sitar for Mental Health',
+  author: 'Rishab Rikhiram Sharma',
+  lengthSec: 395,
+};
+
+const ITUNES_HIT = {
+  kind: 'song',
+  trackName: 'Rama Rama',
+  artistName: 'Rishab Rikhiram Sharma',
+  collectionName: 'Rama Rama - Single',
+  trackTimeMillis: 380_000,
+  artworkUrl100: 'https://is1-ssl.mzstatic.com/image/thumb/x/100x100bb.jpg',
+};
+
+const RECORD: LrclibRecord = {
+  id: 1,
+  trackName: 'Rama Rama',
+  artistName: 'Rishab Rikhiram Sharma',
+  albumName: 'Rama Rama - Single',
+  duration: 380,
+  instrumental: false,
+  plainLyrics: 'Line one\nLine two',
+  syncedLyrics: '[00:10.00]Line one\n[00:15.00]Line two',
+};
+
+type Routes = {
+  itunes?: unknown[];
+  get?: LrclibRecord | null;
+  search?: LrclibRecord[];
+  neteaseSongs?: unknown[];
+  neteaseLyric?: string;
+  ovh?: string;
+};
+
+function fakeFetch(routes: Routes) {
+  const calls: string[] = [];
+  const fn = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    calls.push(url);
+    const json = (body: unknown, status = 200) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      });
+    if (url.startsWith('https://itunes.apple.com/')) return json({ results: routes.itunes ?? [] });
+    if (url.includes('/api/get?')) return routes.get ? json(routes.get) : json({}, 404);
+    if (url.includes('lrclib.net/api/search?')) return json(routes.search ?? []);
+    if (url.includes('music.163.com/api/search/get?')) {
+      return json({ result: { songs: routes.neteaseSongs ?? [] } });
+    }
+    if (url.includes('music.163.com/api/song/lyric?')) {
+      return json({ lrc: { lyric: routes.neteaseLyric ?? '' } });
+    }
+    if (url.startsWith('https://api.lyrics.ovh/')) {
+      return routes.ovh ? json({ lyrics: routes.ovh }) : json({ error: 'No lyrics found' }, 404);
+    }
+    return json({}, 404);
+  }) as typeof fetch;
+  return { fn, calls };
+}
+
+describe('findLyrics', () => {
+  it('finds synced lyrics via iTunes canonicalization + exact LRCLIB get', async () => {
+    const { fn, calls } = fakeFetch({ itunes: [ITUNES_HIT], get: RECORD });
+    const result = await findLyrics(VIDEO, { fetch: fn });
+    expect(result.status).toBe('found');
+    if (result.status !== 'found') return;
+    expect(result.track.artworkUrl).toContain('600x600bb');
+    expect(result.lyrics.sync).toBe('line');
+    expect(result.lyrics.lines.map((l) => l.text)).toEqual(['Line one', 'Line two']);
+    // Exact hit is good enough: no fuzzy searches.
+    expect(calls.some((c) => c.includes('/api/search'))).toBe(false);
+  });
+
+  it('falls back to fuzzy search when iTunes has nothing', async () => {
+    const { fn } = fakeFetch({ itunes: [], search: [RECORD] });
+    const result = await findLyrics(VIDEO, { fetch: fn });
+    expect(result.status).toBe('found');
+  });
+
+  it('reports instrumental tracks', async () => {
+    const { fn } = fakeFetch({
+      itunes: [ITUNES_HIT],
+      get: { ...RECORD, instrumental: true, plainLyrics: null, syncedLyrics: null },
+    });
+    expect((await findLyrics(VIDEO, { fetch: fn })).status).toBe('instrumental');
+  });
+
+  it('refuses unrelated results', async () => {
+    const { fn } = fakeFetch({
+      itunes: [],
+      search: [
+        { ...RECORD, id: 9, trackName: 'Bohemian Rhapsody', artistName: 'Queen', duration: 354 },
+      ],
+    });
+    const result = await findLyrics(VIDEO, { fetch: fn });
+    expect(result).toEqual({
+      status: 'not-found',
+      query: { artist: 'Rishab Rikhiram Sharma', title: 'Rama Rama' },
+    });
+  });
+
+  it('survives network failures', async () => {
+    const failing = (async () => {
+      throw new Error('offline');
+    }) as typeof fetch;
+    expect((await findLyrics(VIDEO, { fetch: failing })).status).toBe('not-found');
+  });
+
+  it('uses plain lyrics when no synced version exists', async () => {
+    const { fn } = fakeFetch({ itunes: [ITUNES_HIT], get: { ...RECORD, syncedLyrics: null } });
+    const result = await findLyrics(VIDEO, { fetch: fn });
+    expect(result.status === 'found' && result.lyrics.sync).toBe('none');
+  });
+});
+
+describe('withMusicCard', () => {
+  const base = {
+    videoId: 'x',
+    title: 'Rick Astley - Never Gonna Give You Up (Official Video)',
+    author: 'Rick Astley',
+    lengthSec: 213,
+  };
+
+  it("puts YouTube's own song identification first when it matches the video", () => {
+    const guesses = withMusicCard(
+      { ...base, music: { title: 'Never Gonna Give You Up (7" Mix)', artist: 'Rick Astley' } },
+      [{ artist: 'Rick Astley', title: 'Never Gonna Give You Up' }],
+    );
+    expect(guesses[0]).toEqual({
+      artist: 'Rick Astley',
+      title: 'Never Gonna Give You Up (7" Mix)',
+    });
+  });
+
+  it('ignores a stale card from the previous video', () => {
+    const guesses = withMusicCard(
+      { ...base, music: { title: 'Bohemian Rhapsody', artist: 'Queen' } },
+      [{ artist: 'Rick Astley', title: 'Never Gonna Give You Up' }],
+    );
+    expect(guesses).toHaveLength(1);
+  });
+
+  it('always trusts YouTube Music metadata', () => {
+    const guesses = withMusicCard(
+      {
+        ...base,
+        title: 'Señorita',
+        author: 'Shawn Mendes',
+        site: 'ytmusic',
+        music: { title: 'Señorita', artist: 'Shawn Mendes' },
+      },
+      [],
+    );
+    expect(guesses).toEqual([{ artist: 'Shawn Mendes', title: 'Señorita' }]);
+  });
+});
+
+describe('findLyrics fallbacks', () => {
+  const NETEASE_SONG = {
+    id: 42,
+    name: 'Rama Rama',
+    duration: 380_000,
+    artists: [{ name: 'Rishab Rikhiram Sharma' }],
+    album: { name: 'Rama Rama' },
+  };
+
+  it('uses NetEase when LRCLIB has nothing, and drops credit lines', async () => {
+    const { fn } = fakeFetch({
+      itunes: [ITUNES_HIT],
+      neteaseSongs: [NETEASE_SONG],
+      neteaseLyric: '[00:00.00] 作词 : Someone\n[00:05.00]First line\n[00:09.00]Second line',
+    });
+    const result = await findLyrics(VIDEO, { fetch: fn });
+    expect(result.status).toBe('found');
+    if (result.status !== 'found') return;
+    expect(result.lyrics.source).toBe('netease');
+    expect(result.lyrics.lines.map((l) => l.text)).toEqual(['First line', 'Second line']);
+  });
+
+  it("falls back to the video's own captions", async () => {
+    const cues = ['One', 'Two', 'Three', 'Four', 'Five'].map((text, i) => ({
+      start: i * 3000,
+      end: i * 3000 + 2500,
+      text,
+    }));
+    const { fn } = fakeFetch({ itunes: [] });
+    const result = await findLyrics(
+      { ...VIDEO, captions: { manual: { language: 'en', cues } } },
+      { fetch: fn },
+    );
+    expect(result.status === 'found' && result.lyrics.source).toBe('youtube-captions');
+  });
+
+  it('auto-syncs plain lyrics from the web using auto-captions', async () => {
+    const lines = [
+      'Rama rama jai shri rama',
+      'Sita rama jai jai rama',
+      'Mangal bhavan amangal haari',
+      'Dravahu so dasharath ajir bihari',
+    ];
+    const words = lines.flatMap((line, i) =>
+      line.split(' ').map((w, j) => ({ start: 10_000 + i * 5000 + j * 400, text: w })),
+    );
+    const { fn } = fakeFetch({ itunes: [ITUNES_HIT], ovh: lines.join('\n') });
+    const result = await findLyrics(
+      { ...VIDEO, captions: { asr: { language: 'en', words } } },
+      { fetch: fn },
+    );
+    expect(result.status).toBe('found');
+    if (result.status !== 'found') return;
+    expect(result.lyrics.source).toBe('lyrics.ovh');
+    expect(result.lyrics.autoSynced).toBe(true);
+    expect(result.lyrics.lines[1]?.start).toBe(15_000);
+  });
+});
