@@ -393,94 +393,145 @@
   opacity: 0.72;
 }
 
-/* ---------- Apple-style word-by-word fill ---------- */
+/* ==========================================================================
+   Apple Music-style lyrics
+   ========================================================================== */
+
+.viewport.synced .line {
+  margin: 0 -10px 14px;
+  padding: 8px 10px;
+  line-height: 1.22;
+  letter-spacing: -0.01em;
+  transition:
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.35s ease,
+    filter 0.35s ease,
+    background 0.2s ease;
+}
+
+/* Lines that aren't being sung: quieter, and softly out of focus with distance. */
+.viewport.synced .line.future {
+  opacity: 0.38;
+}
+
+.viewport.synced .line.past {
+  opacity: 0.28;
+}
+
+.viewport.synced .line.d1 {
+  filter: blur(0.5px);
+}
+
+.viewport.synced .line.d2 {
+  filter: blur(1px);
+}
+
+.viewport.synced .line.d3 {
+  filter: blur(1.5px);
+}
+
+.viewport.synced .line.d4 {
+  filter: blur(2px);
+}
+
+.viewport.synced .line.active {
+  opacity: 1;
+  filter: none;
+}
 
 .line .main {
   display: block;
 }
 
+/* Words: spaces stay outside the spans so lines wrap naturally. */
 .line .w {
   display: inline-block;
-  transition:
-    transform 0.4s var(--ease-spring),
-    text-shadow 0.4s ease;
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* The active line fills word by word: sung part bright, the rest dim, soft edge. */
+/* The line being sung fills word by word: sung part bright, the rest dim. */
 .line.active .w {
   color: transparent;
   background-image: linear-gradient(
     90deg,
-    #fff calc(var(--p, 0%) - 12%),
-    rgba(255, 255, 255, 0.38) calc(var(--p, 0%) + 12%)
+    rgba(255, 255, 255, 1) calc(var(--p, 0%) - 8%),
+    rgba(255, 255, 255, 0.36) calc(var(--p, 0%) + 8%)
   );
   -webkit-background-clip: text;
   background-clip: text;
 }
 
-/* Held notes lift and glow while they're sung. */
+/* Long held notes rise very slightly while sung. */
 .line.active .w.held {
-  transform: translateY(-2px) scale(1.035);
-  text-shadow: 0 0 16px rgba(255, 255, 255, 0.55);
+  transform: translateY(-1.5px);
 }
 
-/* ---------- Intro / instrumental-break dots ---------- */
+/* Original-script line under the English letters. */
+.viewport .line .sub {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.56em;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0;
+  opacity: 0.6;
+}
 
-.line.gap {
-  display: flex;
-  gap: 9px;
-  padding: 16px 10px;
+/* ---------- Intro / instrumental-break dots (fixed in place) ---------- */
+
+.viewport.synced .line.gap {
+  display: block;
+  padding: 18px 10px;
   cursor: default;
 }
 
-.line.gap:hover {
+.viewport.synced .line.gap:hover {
   background: transparent;
 }
 
-.line.gap .dot {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: #fff;
-  opacity: 0.35;
-  transform: scale(0.85);
-  transition:
-    opacity 0.3s ease,
-    transform 0.3s ease;
+.dots-group {
+  display: inline-flex;
+  gap: 8px;
+  transform-origin: left center;
 }
 
-/* Each dot fills in turn as the break goes on, while the group breathes. */
-.line.gap.active {
-  animation: gap-breathe 2.6s ease-in-out infinite;
+.line .dots-group .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0.3;
+}
+
+/* While the break plays: the dots light up one after another and breathe gently. */
+.line.gap.active .dots-group {
+  animation: dots-breathe 2.4s ease-in-out infinite;
 }
 
 .line.gap.active .dot:nth-child(1) {
-  opacity: calc(0.35 + 0.65 * clamp(0, var(--p, 0) * 3, 1));
-  transform: scale(calc(0.85 + 0.25 * clamp(0, var(--p, 0) * 3, 1)));
+  opacity: calc(0.3 + 0.7 * clamp(0, var(--p, 0) * 3, 1));
 }
 
 .line.gap.active .dot:nth-child(2) {
-  opacity: calc(0.35 + 0.65 * clamp(0, var(--p, 0) * 3 - 1, 1));
-  transform: scale(calc(0.85 + 0.25 * clamp(0, var(--p, 0) * 3 - 1, 1)));
+  opacity: calc(0.3 + 0.7 * clamp(0, var(--p, 0) * 3 - 1, 1));
 }
 
 .line.gap.active .dot:nth-child(3) {
-  opacity: calc(0.35 + 0.65 * clamp(0, var(--p, 0) * 3 - 2, 1));
-  transform: scale(calc(0.85 + 0.25 * clamp(0, var(--p, 0) * 3 - 2, 1)));
+  opacity: calc(0.3 + 0.7 * clamp(0, var(--p, 0) * 3 - 2, 1));
 }
 
-@keyframes gap-breathe {
+@keyframes dots-breathe {
   0%,
   100% {
-    scale: 1;
+    transform: scale(1);
   }
   50% {
-    scale: 1.12;
+    transform: scale(1.1);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .line.gap.active {
+  .line.gap.active .dots-group {
     animation: none;
   }
 
