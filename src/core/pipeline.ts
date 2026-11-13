@@ -1,3 +1,4 @@
+import type { CaptionWord } from './agent/protocol';
 import { canRomanize, lyricsScript, romanizeLine } from './lang/romanize';
 import { hasNonLatin } from './lang/script';
 import { autoSync, estimateOffset, shiftLines } from './lyrics/align';
@@ -187,6 +188,21 @@ function romanize(
     }
   }
   return { ...primary, script, romanization: 'none' };
+}
+
+/**
+ * Timed words to align lyrics against: speech recognition if available, else the
+ * uploader's captions (each word placed across its caption's time span).
+ */
+function alignmentWords(video: VideoDetails): CaptionWord[] {
+  const asr = video.captions?.asr?.words;
+  if (asr?.length) return asr;
+  const cues = video.captions?.manual?.cues ?? [];
+  return cues.flatMap((cue) => {
+    const parts = cue.text.split(/\s+/).filter(Boolean);
+    const step = parts.length ? Math.max(0, cue.end - cue.start) / parts.length : 0;
+    return parts.map((text, i) => ({ start: Math.round(cue.start + i * step), text }));
+  });
 }
 
 /** Uploader captions on the video itself, used when no lyrics source has the song. */
@@ -393,35 +409,35 @@ export async function findLyrics(
       : [];
   lyrics = romanize(lyrics, chosen?.candidate, sameSong, durationMs);
 
-  // 6. Timing against this video's speech-recognition captions.
-  const asr = video.captions?.asr?.words;
-  if (asr?.length && lyrics.source !== 'youtube-captions') {
-    if (lyrics.sync === 'none') {
-      const timed = autoSync(lyrics.lines, asr, durationMs);
-      if (timed) lyrics = { ...lyrics, sync: 'line', lines: timed, autoSynced: true };
+  // 6. Timing against this video. Lyrics sources are timed to the album track;
+  //    YouTube captions (speech recognition, or the uploader's own) tell us when
+  //    each line is actually sung in *this* video.
+  const words = alignmentWords(video);
+  let mismatch: Lyrics['videoMismatch'];
+  if (video.site === 'youtube' && video.lengthSec > 0 && lyrics.sync !== 'none') {
+    const lastEnd = (lyrics.lines[lyrics.lines.length - 1]?.end ?? 0) / 1000;
+    const lyricsSec = chosen?.candidate.durationSec ?? lastEnd;
+    if (Math.abs(lyricsSec - video.lengthSec) > VIDEO_MISMATCH_SEC) {
+      mismatch = { videoSec: video.lengthSec, lyricsSec };
+    }
+  }
+  if (words.length && lyrics.source !== 'youtube-captions') {
+    if (lyrics.sync === 'none' || mismatch) {
+      // Plain lyrics, or lyrics timed for a different cut: re-time every line.
+      const timed = autoSync(lyrics.lines, words, (video.lengthSec || 0) * 1000 || durationMs);
+      if (timed) {
+        lyrics = { ...lyrics, sync: 'line', lines: timed, autoSynced: true };
+        mismatch = undefined;
+      }
     } else {
-      const offset = estimateOffset(lyrics.lines, asr);
+      const offset = estimateOffset(lyrics.lines, words);
       if (offset) lyrics = { ...lyrics, lines: shiftLines(lyrics.lines, offset), offsetMs: offset };
     }
   }
 
-  // 7. Is the timing trustworthy for *this video*? An edit/teaser or a music video
-  //    with a long intro won't line up with album timings; say so instead of
-  //    highlighting the wrong line.
-  if (
-    video.site === 'youtube' &&
-    video.lengthSec > 0 &&
-    lyrics.sync !== 'none' &&
-    lyrics.source !== 'youtube-captions' &&
-    !lyrics.offsetMs &&
-    !lyrics.autoSynced
-  ) {
-    const lastEnd = (lyrics.lines[lyrics.lines.length - 1]?.end ?? 0) / 1000;
-    const lyricsSec = chosen?.candidate.durationSec ?? lastEnd;
-    if (Math.abs(lyricsSec - video.lengthSec) > VIDEO_MISMATCH_SEC) {
-      lyrics = { ...lyrics, videoMismatch: { videoSec: video.lengthSec, lyricsSec } };
-    }
-  }
+  // 7. Still timed for a different cut? Then show the lyrics without sync rather
+  //    than highlight the wrong lines.
+  if (mismatch && !lyrics.autoSynced) lyrics = { ...lyrics, videoMismatch: mismatch };
 
   log(
     'lyrics',

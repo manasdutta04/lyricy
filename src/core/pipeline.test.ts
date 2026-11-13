@@ -305,3 +305,46 @@ describe('mixed-script lines', () => {
     expect(result.lyrics.lines[0]?.romanized).toBeUndefined();
   });
 });
+
+describe('re-timing with YouTube captions', () => {
+  const lines = [
+    'Rama rama jai shri rama',
+    'Sita rama jai jai rama',
+    'Mangal bhavan amangal haari',
+    'Dravahu so dasharath ajir bihari',
+  ];
+  const studio = lines
+    .map((t, i) => `[00:${String(10 + i * 8).padStart(2, '0')}.00]${t}`)
+    .join('\n');
+
+  it('re-times lyrics for a different cut when speech captions are available', async () => {
+    const words = lines.flatMap((line, i) =>
+      line.split(' ').map((w, j) => ({ start: 3_000 + i * 5_000 + j * 300, text: w })),
+    );
+    const { fn } = fakeFetch({ itunes: [ITUNES_HIT], get: { ...RECORD, syncedLyrics: studio } });
+    const result = await findLyrics(
+      { ...VIDEO, site: 'youtube', lengthSec: 156, captions: { asr: { language: 'hi', words } } },
+      { fetch: fn },
+    );
+    if (result.status !== 'found') throw new Error(result.status);
+    expect(result.lyrics.autoSynced).toBe(true);
+    expect(result.lyrics.videoMismatch).toBeUndefined();
+    expect(result.lyrics.lines[2]?.start).toBe(13_000);
+  });
+
+  it("uses the uploader's captions for alignment when there's no speech track", async () => {
+    const cues = lines.map((text, i) => ({
+      start: 3_000 + i * 5_000,
+      end: 7_000 + i * 5_000,
+      text,
+    }));
+    const { fn } = fakeFetch({ itunes: [ITUNES_HIT], get: { ...RECORD, syncedLyrics: studio } });
+    const result = await findLyrics(
+      { ...VIDEO, site: 'youtube', lengthSec: 156, captions: { manual: { language: 'hi', cues } } },
+      { fetch: fn },
+    );
+    if (result.status !== 'found') throw new Error(result.status);
+    expect(result.lyrics.autoSynced).toBe(true);
+    expect(result.lyrics.lines[1]?.start).toBe(8_000);
+  });
+});
