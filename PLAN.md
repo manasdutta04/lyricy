@@ -311,3 +311,19 @@ A **golden test set** (videoId → expected track + reference offset) runs in CI
 - **Not possible yet:**
   - Identifying a song by listening needs a paid audio-recognition API (ACRCloud/AudD/Shazam), so a key or backend.
   - Mixes/mashups without chapters can't be split.
+
+### YouTube closed captions + plain display (2026-11-13, night)
+- **Display rule (user's request):**
+  - Synced lyrics play in sync.
+  - Lyrics without usable timing (plain, or timed for another cut) are shown **static**, with no auto-scroll.
+- **YouTube CC, verified in a real page:**
+  - The page hooks keep a copy of caption files the *player itself* downloads when CC is on. Nothing is requested or changed by us.
+  - If CC is already on, captions are used automatically.
+  - Otherwise a **"Use / Sync with YouTube captions"** button has the player load them (turns CC on, captures, turns it back off).
+  - Tested on Despacito (79 uploader caption lines captured, CC restored) and Rick Astley (captions captured after re-toggling CC).
+- **What captions are used for:**
+  - The lyrics themselves, when no lyrics site has the song.
+  - Re-timing every line when the lyrics were timed for another cut (edits, MVs).
+  - Timing plain lyrics.
+  - Detecting an intro offset.
+  - Speech-recognition captions are preferred for alignment; uploader captions work too.
