@@ -95,6 +95,9 @@ export function useAgent() {
     });
 
     port.onDisconnect.addListener(async () => {
+      // Reading lastError tells Chrome we handled "Receiving end does not exist"
+      // (no agent in this tab yet); otherwise it logs it as an unchecked error.
+      void browser.runtime.lastError;
       if (portRef.current !== port) return;
       portRef.current = null;
       if (gotMessage) {
