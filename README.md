@@ -67,14 +67,14 @@ npm install
 npm run dev          # opens Chrome with the extension loaded and hot reload
 ```
 
-| Script                    | What it does                                |
-| ------------------------- | ------------------------------------------- |
-| `npm run build`           | Production build into `.output/chrome-mv3`  |
-| `npm run zip`             | Zip for sharing or a GitHub release         |
-| `npm run compile`         | Type-check                                  |
-| `npm test`                | Unit tests (Vitest)                         |
-| `npm run lint` / `format` | Biome lint + format                         |
-| `npm run icons`           | Re-render the icons from `assets/logo.svg`  |
+| Script                    | What it does                               |
+| ------------------------- | ------------------------------------------ |
+| `npm run build`           | Production build into `.output/chrome-mv3` |
+| `npm run zip`             | Zip for sharing or a GitHub release        |
+| `npm run compile`         | Type-check                                 |
+| `npm test`                | Unit tests (Vitest)                        |
+| `npm run lint` / `format` | Biome lint + format                        |
+| `npm run icons`           | Re-render the icons from `assets/logo.svg` |
 
 Real-network check against the lyric services: `LIVE=1 npx vitest run src/core/pipeline.live.test.ts`
 

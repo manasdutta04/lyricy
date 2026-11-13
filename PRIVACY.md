@@ -11,13 +11,13 @@ Lyricy has no account, no server of its own, no analytics and no tracking. Here 
 
 To find lyrics, Lyricy sends **only the song title, artist and length** to these public services:
 
-| Service | Used for |
-| --- | --- |
+| Service                                                                        | Used for                                     |
+| ------------------------------------------------------------------------------ | -------------------------------------------- |
 | [iTunes Search API](https://performance-partners.apple.com/search-api) (Apple) | The song's official name, length and artwork |
-| [LRCLIB](https://lrclib.net) | Synced lyrics |
-| [NetEase Cloud Music](https://music.163.com) | Synced lyrics |
-| [JioSaavn](https://www.jiosaavn.com) | Lyrics for Indian releases |
-| [lyrics.ovh](https://lyrics.ovh) | Plain lyrics |
+| [LRCLIB](https://lrclib.net)                                                   | Synced lyrics                                |
+| [NetEase Cloud Music](https://music.163.com)                                   | Synced lyrics                                |
+| [JioSaavn](https://www.jiosaavn.com)                                           | Lyrics for Indian releases                   |
+| [lyrics.ovh](https://lyrics.ovh)                                               | Plain lyrics                                 |
 
 These services see your IP address like any website does, and have their own privacy policies. Nothing else about you is sent.
 
@@ -36,13 +36,13 @@ Removing the extension deletes all of it.
 
 ## Permissions
 
-| Permission | Why |
-| --- | --- |
-| Access to the listed music sites | To see what's playing there |
-| Access to the lyric services above | To look up lyrics |
-| `sidePanel` | To show the lyrics next to the page |
-| `storage` | Settings and the lyrics cache |
-| `scripting` | To run on other sites, only after you turn on **Any website** |
-| All websites (optional) | Only requested if you turn on **Any website** in settings |
+| Permission                         | Why                                                           |
+| ---------------------------------- | ------------------------------------------------------------- |
+| Access to the listed music sites   | To see what's playing there                                   |
+| Access to the lyric services above | To look up lyrics                                             |
+| `sidePanel`                        | To show the lyrics next to the page                           |
+| `storage`                          | Settings and the lyrics cache                                 |
+| `scripting`                        | To run on other sites, only after you turn on **Any website** |
+| All websites (optional)            | Only requested if you turn on **Any website** in settings     |
 
 Questions? [Open an issue](https://github.com/manasdutta04/lyricy/issues).

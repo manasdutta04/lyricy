@@ -35,13 +35,13 @@ The extension is now in the `.output/chrome-mv3` folder. Continue below.
 
 1. Open the extensions page:
 
-   | Browser        | Address                    |
-   | -------------- | -------------------------- |
-   | Chrome / Arc   | `chrome://extensions`      |
-   | Edge           | `edge://extensions`        |
-   | Brave          | `brave://extensions`       |
-   | Opera          | `opera://extensions`       |
-   | Vivaldi        | `vivaldi://extensions`     |
+   | Browser      | Address                |
+   | ------------ | ---------------------- |
+   | Chrome / Arc | `chrome://extensions`  |
+   | Edge         | `edge://extensions`    |
+   | Brave        | `brave://extensions`   |
+   | Opera        | `opera://extensions`   |
+   | Vivaldi      | `vivaldi://extensions` |
 
 2. Turn on **Developer mode** (a switch in the top-right corner; in Edge it's in the left sidebar).
 3. Click **Load unpacked**.
@@ -73,13 +73,13 @@ Open the extensions page and click **Remove** on Lyricy's card. You can then del
 
 ## Troubleshooting
 
-| Problem | Fix |
-| --- | --- |
-| "Manifest file is missing or unreadable" | You picked the wrong folder. Choose the one that directly contains `manifest.json`. |
-| The side panel says nothing is playing | Reload the music tab once after installing (tabs opened before the install don't have Lyricy yet). |
-| The browser warns about developer-mode extensions on start-up | That's normal for extensions installed this way. Click **Keep** or close the warning. |
-| Lyrics are a little early or late | Seek once in the video; Lyricy re-reads the position. If one song stays off, [report it](https://github.com/manasdutta04/lyricy/issues/new?template=wrong_lyrics.yml). |
-| A site that isn't listed shows nothing | Open ⚙ and turn on **Any website**, then reload that tab. |
-| The extension disappeared after moving its folder | Load it again from the new location (step 3 above). |
+| Problem                                                       | Fix                                                                                                                                                                    |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Manifest file is missing or unreadable"                      | You picked the wrong folder. Choose the one that directly contains `manifest.json`.                                                                                    |
+| The side panel says nothing is playing                        | Reload the music tab once after installing (tabs opened before the install don't have Lyricy yet).                                                                     |
+| The browser warns about developer-mode extensions on start-up | That's normal for extensions installed this way. Click **Keep** or close the warning.                                                                                  |
+| Lyrics are a little early or late                             | Seek once in the video; Lyricy re-reads the position. If one song stays off, [report it](https://github.com/manasdutta04/lyricy/issues/new?template=wrong_lyrics.yml). |
+| A site that isn't listed shows nothing                        | Open ⚙ and turn on **Any website**, then reload that tab.                                                                                                              |
+| The extension disappeared after moving its folder             | Load it again from the new location (step 3 above).                                                                                                                    |
 
 Still stuck? [Open an issue](https://github.com/manasdutta04/lyricy/issues/new/choose).

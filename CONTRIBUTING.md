@@ -52,15 +52,15 @@ LIVE=1 npx vitest run src/core/pipeline.live.test.ts
 
 ## Where things live
 
-| Area | Files |
-| --- | --- |
-| Lyrics UI and animation | `src/ui/LyricsView.tsx`, `src/ui/lyrics.css` |
-| Side panel shell and settings | `src/entrypoints/sidepanel/` |
+| Area                                          | Files                                                                       |
+| --------------------------------------------- | --------------------------------------------------------------------------- |
+| Lyrics UI and animation                       | `src/ui/LyricsView.tsx`, `src/ui/lyrics.css`                                |
+| Side panel shell and settings                 | `src/entrypoints/sidepanel/`                                                |
 | What's playing (YouTube player, MediaSession) | `src/entrypoints/page-hooks.content.ts`, `src/entrypoints/agent.content.ts` |
-| Song matching and source ranking | `src/core/pipeline.ts`, `src/core/match/`, `src/core/resolve/` |
-| Lyrics sources | `src/core/providers/` |
-| Syncing to the video | `src/core/lyrics/align.ts`, `src/core/agent/captions.ts` |
-| Transliteration (Hinglish, Bengali…) | `src/core/lang/` |
+| Song matching and source ranking              | `src/core/pipeline.ts`, `src/core/match/`, `src/core/resolve/`              |
+| Lyrics sources                                | `src/core/providers/`                                                       |
+| Syncing to the video                          | `src/core/lyrics/align.ts`, `src/core/agent/captions.ts`                    |
+| Transliteration (Hinglish, Bengali…)          | `src/core/lang/`                                                            |
 
 ## Guidelines
 
@@ -68,7 +68,7 @@ LIVE=1 npx vitest run src/core/pipeline.live.test.ts
 - **Stay free and private.** No paid APIs, accounts, analytics or tracking. Only song title, artist and length may be sent to lyric services. Add new hosts to `wxt.config.ts` and list them in [PRIVACY.md](PRIVACY.md).
 - **Don't draw on the page.** Lyricy's UI lives in the side panel and floating window, never inside the website.
 - **Respect the services.** Use public endpoints as they're meant to be used. Don't work around bot checks, rate limits or sign-in.
-- **Style:** Biome formats the code; prefer small functions with a short comment explaining *why*.
+- **Style:** Biome formats the code; prefer small functions with a short comment explaining _why_.
 
 ## Commit messages
 
