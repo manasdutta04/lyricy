@@ -206,6 +206,32 @@ describe('findLyrics fallbacks', () => {
     expect(result.status === 'found' && result.lyrics.source).toBe('youtube-captions');
   });
 
+  it('uses lyrics from the video description, synced with auto-captions', async () => {
+    const lines = [
+      'Rama rama jai shri rama',
+      'Sita rama jai jai rama',
+      'Mangal bhavan amangal haari',
+      'Dravahu so dasharath ajir bihari',
+    ];
+    const words = lines.flatMap((line, i) =>
+      line.split(' ').map((w, j) => ({ start: 8000 + i * 5000 + j * 400, text: w })),
+    );
+    const { fn } = fakeFetch({ itunes: [] });
+    const result = await findLyrics(
+      {
+        ...VIDEO,
+        descriptionLyrics: lines.join('\n'),
+        captions: { asr: { language: 'en', words, cues: [] } },
+      },
+      { fetch: fn },
+    );
+    expect(result.status).toBe('found');
+    if (result.status !== 'found') return;
+    expect(result.lyrics.source).toBe('youtube-description');
+    expect(result.lyrics.autoSynced).toBe(true);
+    expect(result.lyrics.lines[1]?.start).toBe(13_000);
+  });
+
   it('auto-syncs plain lyrics from the web using auto-captions', async () => {
     const lines = [
       'Rama rama jai shri rama',

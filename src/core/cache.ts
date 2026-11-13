@@ -2,7 +2,7 @@ import { storage } from '#imports';
 import type { LyricsResult } from './lyrics/types';
 
 /** Bump when matching logic changes so stale picks get re-resolved. */
-const CACHE_VERSION = 8;
+const CACHE_VERSION = 9;
 const DAY = 24 * 60 * 60 * 1000;
 const TTL: Record<LyricsResult['status'], number> = {
   found: 30 * DAY,

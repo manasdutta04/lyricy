@@ -49,6 +49,8 @@ export interface YouTubeInfo {
   chapterStartSec?: number;
   /** Songs inside a jukebox/medley video (from the description or YouTube chapters). */
   chapters?: { title: string; startSec: number }[];
+  /** Lyrics the uploader pasted into the description, if any. */
+  descriptionLyrics?: string;
 }
 
 export interface TrackSnapshot {

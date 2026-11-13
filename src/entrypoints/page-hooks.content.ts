@@ -19,6 +19,7 @@ import {
 } from '@/core/agent/protocol';
 import { SUPPORTED_SITES } from '@/core/agent/sites';
 import { type Chapter, parseDescriptionChapters } from '@/core/youtube/chapters';
+import { parseDescriptionLyrics } from '@/core/youtube/description-lyrics';
 
 interface YtPlayer extends HTMLElement {
   getPlayerResponse?: () => {
@@ -177,6 +178,18 @@ function install() {
 
   /** Chapters from the description, else from YouTube's own chapter data (first page load). */
   let chapterCache: { videoId: string; chapters: Chapter[] | undefined } | null = null;
+  let descriptionCache: { videoId: string; lyrics: string | undefined } | null = null;
+
+  /** Snapshots run 4×/second; parse the description once per video. */
+  function readDescriptionLyrics(videoId: string, description: string) {
+    if (descriptionCache?.videoId === videoId) return descriptionCache.lyrics;
+    let lyrics: string | undefined;
+    try {
+      lyrics = parseDescriptionLyrics(description);
+    } catch {}
+    descriptionCache = { videoId, lyrics };
+    return lyrics;
+  }
   function readChapters(videoId: string, description: string, lengthSec: number) {
     // Snapshots run 4×/second; chapters only change with the video.
     if (chapterCache?.videoId === videoId) return chapterCache.chapters;
@@ -242,6 +255,7 @@ function install() {
           vd.shortDescription ?? '',
           Number(vd.lengthSeconds) || 0,
         ),
+        descriptionLyrics: readDescriptionLyrics(vd.videoId, vd.shortDescription ?? ''),
       };
     } catch {
       return undefined;

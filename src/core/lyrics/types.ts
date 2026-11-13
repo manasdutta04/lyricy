@@ -22,7 +22,13 @@ export interface LyricLine {
   romanized?: string;
 }
 
-export type LyricsSource = 'lrclib' | 'netease' | 'jiosaavn' | 'lyrics.ovh' | 'youtube-captions';
+export type LyricsSource =
+  | 'lrclib'
+  | 'netease'
+  | 'jiosaavn'
+  | 'lyrics.ovh'
+  | 'youtube-captions'
+  | 'youtube-description';
 
 export const SOURCE_LABELS: Record<LyricsSource, string> = {
   lrclib: 'LRCLIB',
@@ -30,6 +36,7 @@ export const SOURCE_LABELS: Record<LyricsSource, string> = {
   jiosaavn: 'JioSaavn',
   'lyrics.ovh': 'lyrics.ovh',
   'youtube-captions': 'YouTube captions',
+  'youtube-description': 'Video description',
 };
 
 export interface Lyrics {
@@ -83,6 +90,10 @@ export interface VideoDetails {
   music?: { title: string; artist: string; album?: string };
   /** YouTube captions, for fallback lyrics and auto-sync. */
   captions?: CaptionData | null;
+  /** Lyrics from the video description (exact words of this upload). */
+  descriptionLyrics?: string;
+  /** "Find it anyway": search wider and accept looser matches. */
+  deep?: boolean;
 }
 
 export type LyricsResult =

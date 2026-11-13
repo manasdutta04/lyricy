@@ -29,6 +29,8 @@ export const CANONICAL_THRESHOLD = 0.72;
 const HINT_THRESHOLD = 0.55;
 /** Lyrics below this confidence are not shown — wrong lyrics are worse than none. */
 export const ACCEPT_THRESHOLD = 0.62;
+/** "Find it anyway": the user asked for lyrics, so a looser match is worth showing. */
+const DEEP_ACCEPT_THRESHOLD = 0.5;
 /** An exact LRCLIB hit this good (synced, Latin) skips the other sources. */
 const SHORT_CIRCUIT = 0.9;
 /** Uploads scoring within this of the best are treated as the same song. */
@@ -226,6 +228,17 @@ function inSongScript(lyrics: Lyrics, video: VideoDetails): Lyrics {
   };
 }
 
+function hasManualCaptions(video: VideoDetails): boolean {
+  return (video.captions?.manual?.cues.length ?? 0) >= 4;
+}
+
+/** Lyrics the uploader pasted into the video description. */
+function descriptionLyrics(video: VideoDetails): Lyrics | undefined {
+  const lines = video.descriptionLyrics ? parsePlain(video.descriptionLyrics) : [];
+  if (lines.length < 4) return undefined;
+  return { sync: 'none', lines, source: 'youtube-description', sourceId: video.videoId };
+}
+
 /** Uploader captions on the video itself, used when no lyrics source has the song. */
 function captionsLyrics(video: VideoDetails): Lyrics | undefined {
   const manual = video.captions?.manual?.cues;
@@ -254,6 +267,7 @@ export async function findLyrics(
   { fetch: rawFetch, log = () => {} }: PipelineDeps,
 ): Promise<LyricsResult> {
   const deps = { fetch: withRetry(rawFetch) };
+  const accept = video.deep ? DEEP_ACCEPT_THRESHOLD : ACCEPT_THRESHOLD;
   const guesses = withMusicCard(video, parseVideoTitle(video.title, video.author));
   const first = guesses[0];
   if (!first) return { status: 'not-found', query: { artist: video.author, title: video.title } };
@@ -303,8 +317,13 @@ export async function findLyrics(
     queries.push({ ...canonical, durationSec: video.lengthSec, durationKind: 'tight' });
   }
   const hintTerm = hint ? `${hint.artist} ${hint.title}` : undefined;
+  // "Find it anyway" also searches each title guess on its own (no artist), which
+  // finds songs credited to someone the video doesn't name.
+  const deepTerms = video.deep ? guesses.slice(0, 3).map((g) => g.title) : [];
   const searchTerms = [
-    ...new Set([hintTerm, firstTerm, namedTerm].filter((t): t is string => Boolean(t))),
+    ...new Set(
+      [hintTerm, firstTerm, namedTerm, ...deepTerms].filter((t): t is string => Boolean(t)),
+    ),
   ];
 
   // 2. Gather candidates from every provider.
@@ -353,7 +372,7 @@ export async function findLyrics(
       const unique = [...new Map(songs.map((s) => [s.id, s])).values()];
       const top = unique
         .map((s) => ({ s, score: bestScore(queries, { ...s, synced: true }) }))
-        .filter((x) => x.score >= ACCEPT_THRESHOLD)
+        .filter((x) => x.score >= accept)
         .sort((a, b) => b.score - a.score)
         .slice(0, NETEASE_LYRIC_FETCHES);
       return Promise.all(
@@ -395,7 +414,7 @@ export async function findLyrics(
 
   // 3. Pick: the best synced upload among same-song candidates, else the best overall.
   let chosen: Scored | undefined;
-  if (best && best.score >= ACCEPT_THRESHOLD) {
+  if (best && best.score >= accept) {
     const sameSong = all.filter((s) => s.score >= best.score - SAME_SONG_MARGIN);
     const synced = sameSong.filter((s) => s.candidate.lrc);
     // On YouTube, prefer the upload timed to this exact cut of the song (many LRCLIB
@@ -414,22 +433,38 @@ export async function findLyrics(
     undefined;
   let lyrics = chosen ? candidateLyrics(chosen.candidate, durationMs) : undefined;
 
-  // 4. Fallbacks: the video's own captions, then plain lyrics from the web.
+  // 4. Fallbacks, most exact first: the uploader's own captions, lyrics pasted in
+  //    the description, YouTube's auto-captions, then plain lyrics from the web.
+  if (!lyrics && hasManualCaptions(video)) lyrics = captionsLyrics(video);
+  if (!lyrics) lyrics = descriptionLyrics(video);
   if (!lyrics) lyrics = captionsLyrics(video);
   const plainSource = canonical ?? hint;
   if (!lyrics) {
     // JioSaavn has (Hinglish) lyrics for many Indian releases.
     const term = plainSource ? `${plainSource.title} ${plainSource.artist}` : firstTerm;
-    const hits = (await settle(jiosaavnSearch(term, deps.fetch))) ?? [];
-    const match = hits
+    const terms = video.deep ? [...new Set([term, ...searchTerms])].slice(0, 4) : [term];
+    const hits = (
+      await Promise.all(terms.map((t) => settle(jiosaavnSearch(t, deps.fetch))))
+    ).flatMap((r) => r ?? []);
+    const matches = [...new Map(hits.map((h) => [h.id, h])).values()]
       .map((h) => ({ h, score: bestScore(queries, { ...h, synced: true }) }))
-      .filter((x) => x.score >= ACCEPT_THRESHOLD)
-      .sort((a, b) => b.score - a.score)[0];
-    const plain = match && (await settle(jiosaavnLyrics(match.h.id, deps.fetch)));
-    if (plain) lyrics = { sync: 'none', lines: parsePlain(plain), source: 'jiosaavn' };
+      .filter((x) => x.score >= accept)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, video.deep ? 3 : 1);
+    for (const match of matches) {
+      const plain = await settle(jiosaavnLyrics(match.h.id, deps.fetch));
+      if (plain) {
+        lyrics = { sync: 'none', lines: parsePlain(plain), source: 'jiosaavn' };
+        break;
+      }
+    }
   }
-  if (!lyrics && plainSource) {
-    const plain = await settle(lyricsOvh(plainSource.artist, plainSource.title, deps.fetch));
+  const ovhTargets = [plainSource, ...(video.deep ? guesses.slice(0, 2) : [])].filter(
+    (t): t is { artist: string; title: string } => Boolean(t?.artist && t.title),
+  );
+  for (const target of ovhTargets) {
+    if (lyrics) break;
+    const plain = await settle(lyricsOvh(target.artist, target.title, deps.fetch));
     if (plain) lyrics = { sync: 'none', lines: parsePlain(plain), source: 'lyrics.ovh' };
   }
   if (!lyrics?.lines.length) {
