@@ -13,8 +13,6 @@ interface Props {
   onRetry: () => void;
   onSearchAnyway: () => void;
   onSearch: (title: string, artist: string) => void;
-  /** Have YouTube load its captions and use them for lyrics or timing. */
-  onUseCaptions?: () => void;
 }
 
 function Dots() {
@@ -90,7 +88,6 @@ export function LyricsSurface({
   onRetry,
   onSearchAnyway,
   onSearch,
-  onUseCaptions,
 }: Props) {
   const [artFailed, setArtFailed] = useState(false);
   const [searching, setSearching] = useState(false);
@@ -125,17 +122,6 @@ export function LyricsSurface({
     else if (found.lyrics.autoSynced) timing = 'synced with YouTube captions';
     else if (found.lyrics.offsetMs) timing = 'matched to video';
   }
-
-  // YouTube's own captions can supply missing lyrics or the missing timing.
-  const hasCaptions = Boolean(playing.youtube?.captionTracks?.length) && !isShorts;
-  const captionsButton =
-    hasCaptions && onUseCaptions ? (
-      <button type="button" class="link" onClick={onUseCaptions}>
-        {notFound ? 'Use YouTube captions' : 'Sync with YouTube captions'}
-      </button>
-    ) : null;
-  const unsyncedHere =
-    found && (found.lyrics.sync === 'none' || found.lyrics.videoMismatch) && !isShorts;
 
   return (
     <section class="panel" aria-label="Lyrics">
@@ -195,7 +181,6 @@ export function LyricsSurface({
           <LyricsView
             lyrics={found.lyrics}
             playback={playback}
-            action={unsyncedHere ? captionsButton : null}
             unsyncedNotice={
               isShorts && found.lyrics.sync !== 'none'
                 ? "Shorts play a clip, so lyrics aren't synced"
@@ -211,8 +196,7 @@ export function LyricsSurface({
         {notFound && (
           <div class="status">
             <p>No lyrics found.</p>
-            {captionsButton && <p>{captionsButton}</p>}
-            <p>Or try a different title:</p>
+            <p>Try a different title:</p>
             <SearchForm
               initialTitle={searchTitle}
               initialArtist={searchArtist}
