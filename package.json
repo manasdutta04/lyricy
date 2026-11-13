@@ -2,7 +2,7 @@
   "name": "lyricy",
   "description": "Apple Music-style, time-synced lyrics for YouTube.",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.1.0",
   "type": "module",
   "license": "Apache-2.0",
   "scripts": {
