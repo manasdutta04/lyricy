@@ -328,3 +328,13 @@ A **golden test set** (videoId → expected track + reference offset) runs in CI
   - Timing plain lyrics.
   - Detecting an intro offset.
   - Speech-recognition captions are preferred for alignment; uploader captions work too.
+
+### Zero-click captions, playing-tab follow, floating window, word fill (2026-11-14)
+- **Captions load automatically:** only when lyrics sources gave nothing synced to the video, and once per video. The panel stays on "searching" instead of flashing "not found". The button is gone.
+- **Follows the playing tab:** the panel shows lyrics for whichever tab is audible, so switching to another tab keeps lyrics going.
+- **Floating window (⧉):** a Document Picture-in-Picture window that stays on top, including over fullscreen video, where Chrome hides the side panel. Opening it needs one click (a Chrome rule).
+- **Song's own script:** when auto-captions transcribe a Bengali/Gujarati/Punjabi song in Hindi letters, the original line is converted to the song's script (detected from the title or label). The English line stays readable. Gujarati → English letters added.
+- **Apple-style animation:**
+  - Words fill left to right as they're sung, using real word timing when the source has it, otherwise spread by word length.
+  - Held notes lift and glow.
+  - Intros and instrumental breaks show three dots that fill in turn and breathe.
