@@ -99,10 +99,12 @@ function EmptyState({
   onReload: () => void;
   onEnableAllSites: () => void;
 }) {
-  if (status === 'connecting') return <div class="empty" />;
+  const logo = <img class="empty-logo" src="/icon/128.png" alt="" />;
+  if (status === 'connecting') return <div class="empty">{logo}</div>;
   if (status === 'needs-reload') {
     return (
       <div class="empty">
+        {logo}
         <p>Reload this tab to show lyrics.</p>
         <button type="button" class="pill" onClick={onReload}>
           Reload
@@ -113,6 +115,7 @@ function EmptyState({
   if (status === 'unsupported') {
     return (
       <div class="empty">
+        {logo}
         <p>No music on this tab.</p>
         <button type="button" class="link" onClick={onEnableAllSites}>
           Enable on all websites
@@ -122,6 +125,7 @@ function EmptyState({
   }
   return (
     <div class="empty">
+      {logo}
       <p>Play a song to see its lyrics.</p>
     </div>
   );

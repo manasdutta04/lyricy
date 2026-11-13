@@ -400,3 +400,11 @@ body.floating .app .header {
 body.floating .app .line {
   font-size: clamp(20px, 7vw, 30px);
 }
+
+.empty-logo {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 4px;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(255, 45, 111, 0.25);
+}
