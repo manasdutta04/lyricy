@@ -36,6 +36,7 @@ type Routes = {
   search?: LrclibRecord[];
   neteaseSongs?: unknown[];
   neteaseLyric?: string;
+  saavn?: { results: unknown[]; lyrics?: string };
   ovh?: string;
 };
 
@@ -57,6 +58,12 @@ function fakeFetch(routes: Routes) {
     }
     if (url.includes('music.163.com/api/song/lyric?')) {
       return json({ lrc: { lyric: routes.neteaseLyric ?? '' } });
+    }
+    if (url.includes('jiosaavn.com/api.php') && url.includes('search.getResults')) {
+      return json({ results: routes.saavn?.results ?? [] });
+    }
+    if (url.includes('jiosaavn.com/api.php') && url.includes('lyrics.getLyrics')) {
+      return json({ lyrics: routes.saavn?.lyrics ?? '' });
     }
     if (url.startsWith('https://api.lyrics.ovh/')) {
       return routes.ovh ? json({ lyrics: routes.ovh }) : json({ error: 'No lyrics found' }, 404);
@@ -219,5 +226,82 @@ describe('findLyrics fallbacks', () => {
     expect(result.lyrics.source).toBe('lyrics.ovh');
     expect(result.lyrics.autoSynced).toBe(true);
     expect(result.lyrics.lines[1]?.start).toBe(15_000);
+  });
+});
+
+describe('timing against the video', () => {
+  const lrc = '[00:10.00]Line one\n[00:15.00]Line two\n[00:20.00]Line three';
+
+  it("prefers the upload timed to this video's length", async () => {
+    const { fn } = fakeFetch({
+      itunes: [ITUNES_HIT],
+      search: [
+        { ...RECORD, id: 1, duration: 380, syncedLyrics: lrc },
+        { ...RECORD, id: 2, duration: 396, syncedLyrics: lrc },
+      ],
+    });
+    const result = await findLyrics({ ...VIDEO, site: 'youtube' }, { fetch: fn });
+    expect(result.status === 'found' && result.lyrics.sourceId).toBe('lrclib:2');
+  });
+
+  it('flags lyrics timed for a different cut of the song', async () => {
+    const { fn } = fakeFetch({ itunes: [ITUNES_HIT], get: RECORD });
+    const edit = { ...VIDEO, lengthSec: 156, site: 'youtube' as const };
+    const result = await findLyrics(edit, { fetch: fn });
+    expect(result.status === 'found' && result.lyrics.videoMismatch).toEqual({
+      videoSec: 156,
+      lyricsSec: 380,
+    });
+  });
+
+  it('does not flag lyrics that fit the video', async () => {
+    const { fn } = fakeFetch({ itunes: [ITUNES_HIT], get: RECORD });
+    const result = await findLyrics({ ...VIDEO, lengthSec: 383, site: 'youtube' }, { fetch: fn });
+    expect(result.status === 'found' && result.lyrics.videoMismatch).toBeUndefined();
+  });
+});
+
+describe('JioSaavn fallback', () => {
+  it('uses JioSaavn plain lyrics when no synced source has the song', async () => {
+    const { fn } = fakeFetch({
+      itunes: [ITUNES_HIT],
+      saavn: {
+        results: [
+          {
+            id: 'abc',
+            title: 'Rama Rama',
+            more_info: {
+              has_lyrics: 'true',
+              duration: '380',
+              artistMap: { primary_artists: [{ name: 'Rishab Rikhiram Sharma' }] },
+            },
+          },
+        ],
+        lyrics: 'Rama rama<br>Jai shri rama',
+      },
+    });
+    const result = await findLyrics(VIDEO, { fetch: fn });
+    expect(result.status === 'found' && result.lyrics.source).toBe('jiosaavn');
+    expect(result.status === 'found' && result.lyrics.lines.map((l) => l.text)).toEqual([
+      'Rama rama',
+      'Jai shri rama',
+    ]);
+  });
+});
+
+describe('mixed-script lines', () => {
+  it('converts the non-Latin parts of mostly-English lyrics', async () => {
+    const { fn } = fakeFetch({
+      itunes: [ITUNES_HIT],
+      get: {
+        ...RECORD,
+        syncedLyrics:
+          '[00:10.00]Emotional saiyaan\n[00:15.00]Senti মারে, পালটি মারে\n[00:20.00]Love you baby',
+      },
+    });
+    const result = await findLyrics(VIDEO, { fetch: fn });
+    if (result.status !== 'found') throw new Error(result.status);
+    expect(result.lyrics.lines[1]?.romanized).toBe('Senti mare, palti mare');
+    expect(result.lyrics.lines[0]?.romanized).toBeUndefined();
   });
 });

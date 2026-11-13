@@ -1,4 +1,5 @@
 import { canRomanize, lyricsScript, romanizeLine } from './lang/romanize';
+import { hasNonLatin } from './lang/script';
 import { autoSync, estimateOffset, shiftLines } from './lyrics/align';
 import { parseLrc, parsePlain } from './lyrics/lrc';
 import { attachRomanized, matchTwin } from './lyrics/romanized-twin';
@@ -13,6 +14,7 @@ import type {
 import { bestScore, type MatchCandidate, type MatchQuery } from './match/score';
 import { artistSimilarity, normalize } from './match/similarity';
 import { withRetry } from './net';
+import { jiosaavnLyrics, jiosaavnSearch } from './providers/jiosaavn';
 import { type LrclibRecord, lrclibGet, lrclibSearch } from './providers/lrclib';
 import { lyricsOvh } from './providers/lyrics-ovh';
 import { neteaseLyrics, neteaseSearch } from './providers/netease';
@@ -31,6 +33,8 @@ const SHORT_CIRCUIT = 0.9;
 const SAME_SONG_MARGIN = 0.1;
 /** How many NetEase search hits we fetch lyrics for. */
 const NETEASE_LYRIC_FETCHES = 3;
+/** Lyrics timed for a version this much longer/shorter than the video can't be trusted to sync. */
+const VIDEO_MISMATCH_SEC = 10;
 
 export interface PipelineDeps {
   fetch: FetchFn;
@@ -125,7 +129,20 @@ function romanize(
   durationMs?: number,
 ): Lyrics {
   const script = lyricsScript(primary.lines);
-  if (script === 'latin' || script === 'none') return { ...primary, script };
+  if (script === 'latin' || script === 'none') {
+    // Mostly English letters, but some lines may still mix in another script
+    // ("Senti মারে, পালটি মারে"): convert just those.
+    const mixed = primary.lines.some((l) => hasNonLatin(l.text));
+    if (!mixed) return { ...primary, script };
+    return {
+      ...primary,
+      script,
+      romanization: 'generated',
+      lines: primary.lines.map((l) =>
+        hasNonLatin(l.text) ? { ...l, romanized: romanizeLine(l.text) } : l,
+      ),
+    };
+  }
 
   for (const { candidate } of sameSong) {
     const other = candidateLyrics(candidate, durationMs);
@@ -230,6 +247,10 @@ export async function findLyrics(
   const queries: MatchQuery[] = canonical
     ? [{ ...canonical, durationKind: 'tight' }, ...videoQueries]
     : videoQueries;
+  // An upload timed to this exact YouTube cut is as good a match as the album track.
+  if (canonical && video.site === 'youtube' && video.lengthSec > 0) {
+    queries.push({ ...canonical, durationSec: video.lengthSec, durationKind: 'tight' });
+  }
   const hintTerm = hint ? `${hint.artist} ${hint.title}` : undefined;
   const searchTerms = [
     ...new Set([hintTerm, firstTerm, namedTerm].filter((t): t is string => Boolean(t))),
@@ -325,7 +346,15 @@ export async function findLyrics(
   let chosen: Scored | undefined;
   if (best && best.score >= ACCEPT_THRESHOLD) {
     const sameSong = all.filter((s) => s.score >= best.score - SAME_SONG_MARGIN);
-    chosen = sameSong.find((s) => s.candidate.lrc) ?? best;
+    const synced = sameSong.filter((s) => s.candidate.lrc);
+    // On YouTube, prefer the upload timed to this exact cut of the song (many LRCLIB
+    // entries were synced to the YouTube video, not the album track).
+    if (video.site === 'youtube' && video.lengthSec > 0) {
+      const gap = (s: Scored) =>
+        Math.abs((s.candidate.durationSec ?? Number.POSITIVE_INFINITY) - video.lengthSec);
+      synced.sort((a, b) => gap(a) - gap(b) || b.score - a.score);
+    }
+    chosen = synced[0] ?? best;
     if (chosen.candidate.instrumental) return { status: 'instrumental', track };
   }
 
@@ -337,6 +366,17 @@ export async function findLyrics(
   // 4. Fallbacks: the video's own captions, then plain lyrics from the web.
   if (!lyrics) lyrics = captionsLyrics(video);
   const plainSource = canonical ?? hint;
+  if (!lyrics) {
+    // JioSaavn has (Hinglish) lyrics for many Indian releases.
+    const term = plainSource ? `${plainSource.title} ${plainSource.artist}` : firstTerm;
+    const hits = (await settle(jiosaavnSearch(term, deps.fetch))) ?? [];
+    const match = hits
+      .map((h) => ({ h, score: bestScore(queries, { ...h, synced: true }) }))
+      .filter((x) => x.score >= ACCEPT_THRESHOLD)
+      .sort((a, b) => b.score - a.score)[0];
+    const plain = match && (await settle(jiosaavnLyrics(match.h.id, deps.fetch)));
+    if (plain) lyrics = { sync: 'none', lines: parsePlain(plain), source: 'jiosaavn' };
+  }
   if (!lyrics && plainSource) {
     const plain = await settle(lyricsOvh(plainSource.artist, plainSource.title, deps.fetch));
     if (plain) lyrics = { sync: 'none', lines: parsePlain(plain), source: 'lyrics.ovh' };
@@ -362,6 +402,24 @@ export async function findLyrics(
     } else {
       const offset = estimateOffset(lyrics.lines, asr);
       if (offset) lyrics = { ...lyrics, lines: shiftLines(lyrics.lines, offset), offsetMs: offset };
+    }
+  }
+
+  // 7. Is the timing trustworthy for *this video*? An edit/teaser or a music video
+  //    with a long intro won't line up with album timings; say so instead of
+  //    highlighting the wrong line.
+  if (
+    video.site === 'youtube' &&
+    video.lengthSec > 0 &&
+    lyrics.sync !== 'none' &&
+    lyrics.source !== 'youtube-captions' &&
+    !lyrics.offsetMs &&
+    !lyrics.autoSynced
+  ) {
+    const lastEnd = (lyrics.lines[lyrics.lines.length - 1]?.end ?? 0) / 1000;
+    const lyricsSec = chosen?.candidate.durationSec ?? lastEnd;
+    if (Math.abs(lyricsSec - video.lengthSec) > VIDEO_MISMATCH_SEC) {
+      lyrics = { ...lyrics, videoMismatch: { videoSec: video.lengthSec, lyricsSec } };
     }
   }
 

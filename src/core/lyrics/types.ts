@@ -22,11 +22,12 @@ export interface LyricLine {
   romanized?: string;
 }
 
-export type LyricsSource = 'lrclib' | 'netease' | 'lyrics.ovh' | 'youtube-captions';
+export type LyricsSource = 'lrclib' | 'netease' | 'jiosaavn' | 'lyrics.ovh' | 'youtube-captions';
 
 export const SOURCE_LABELS: Record<LyricsSource, string> = {
   lrclib: 'LRCLIB',
   netease: 'NetEase Cloud Music',
+  jiosaavn: 'JioSaavn',
   'lyrics.ovh': 'lyrics.ovh',
   'youtube-captions': 'YouTube captions',
 };
@@ -47,6 +48,11 @@ export interface Lyrics {
   autoSynced?: boolean;
   /** Shift applied so studio-timed lyrics match this video (e.g. a music-video intro). */
   offsetMs?: number;
+  /**
+   * The lyrics are timed for a different cut of the song than this video (an edit,
+   * teaser or long music video), so line-by-line highlighting would be wrong.
+   */
+  videoMismatch?: { videoSec: number; lyricsSec: number };
 }
 
 /** Canonical song metadata (from iTunes or the lyric provider). */
