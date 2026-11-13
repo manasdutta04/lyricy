@@ -120,6 +120,26 @@ function install() {
   const ytPlayer = () =>
     document.getElementById(isShorts() ? 'shorts-player' : 'movie_player') as YtPlayer | null;
 
+  /**
+   * YouTube's mini player keeps the video playing in a corner while the user
+   * browses (the page is then not /watch). The same #movie_player moves into it.
+   */
+  function inMiniplayer(): boolean {
+    if (site !== 'youtube') return false;
+    const app = document.querySelector('ytd-app');
+    if (app?.hasAttribute('miniplayer-is-active')) return true;
+    if (document.querySelector('ytd-miniplayer[active]')) return true;
+    const player = ytPlayer();
+    if (player?.closest('ytd-miniplayer, .ytdMiniplayerComponentHost')) return true;
+    // Fallback: the main player is still playing a video off the watch page
+    // (never a hover preview on the home page, which is its own small player).
+    if (!player || player.closest('ytd-video-preview, #inline-preview-player, #inline-player')) {
+      return false;
+    }
+    const video = player?.querySelector<HTMLVideoElement>('video.html5-main-video');
+    return Boolean(video && !video.paused && !video.ended && video.currentTime > 0);
+  }
+
   function activeMedia(): HTMLMediaElement | null {
     if (site !== 'other') {
       const player = ytPlayer();
@@ -236,7 +256,10 @@ function install() {
     let track: TrackSnapshot | null = null;
     if (site !== 'other') {
       const yt = youtubeInfo();
-      if (yt && (site === 'ytmusic' || location.pathname === '/watch' || isShorts())) {
+      if (
+        yt &&
+        (site === 'ytmusic' || location.pathname === '/watch' || isShorts() || inMiniplayer())
+      ) {
         track = {
           key: yt.videoId,
           title: site === 'ytmusic' && meta?.title ? meta.title : yt.title,
