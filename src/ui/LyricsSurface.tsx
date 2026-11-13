@@ -12,6 +12,7 @@ interface Props {
   onNudge: (deltaMs: number) => void;
   onRetry: () => void;
   onSearchAnyway: () => void;
+  onSearch: (title: string, artist: string) => void;
 }
 
 function Dots() {
@@ -24,7 +25,60 @@ function Dots() {
   );
 }
 
-/** The lyrics card: artwork header, lyrics or status, source + timing footer. */
+/** Compact "song / artist" search used for misses and wrong matches. */
+function SearchForm({
+  initialTitle,
+  initialArtist,
+  onSearch,
+  onCancel,
+}: {
+  initialTitle: string;
+  initialArtist: string;
+  onSearch: (title: string, artist: string) => void;
+  onCancel?: () => void;
+}) {
+  const [title, setTitle] = useState(initialTitle);
+  const [artist, setArtist] = useState(initialArtist);
+  return (
+    <form
+      class="search"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSearch(title, artist);
+      }}
+    >
+      <input
+        class="field"
+        value={title}
+        onInput={(e) => setTitle(e.currentTarget.value)}
+        placeholder="Song"
+        aria-label="Song"
+      />
+      <input
+        class="field"
+        value={artist}
+        onInput={(e) => setArtist(e.currentTarget.value)}
+        placeholder="Artist (optional)"
+        aria-label="Artist"
+      />
+      <div class="search-actions">
+        {onCancel && (
+          <button type="button" class="link" onClick={onCancel}>
+            Cancel
+          </button>
+        )}
+        <button type="submit" class="pill" disabled={!title.trim()}>
+          Search
+        </button>
+      </div>
+    </form>
+  );
+}
+
+const formatOffset = (ms: number) =>
+  ms === 0 ? '0.0s' : `${ms > 0 ? '+' : ''}${(ms / 1000).toFixed(2)}s`;
+
+/** Minimal lyrics card: small header, lyrics, and a quiet footer. */
 export function LyricsSurface({
   state,
   playback,
@@ -33,17 +87,20 @@ export function LyricsSurface({
   onNudge,
   onRetry,
   onSearchAnyway,
+  onSearch,
 }: Props) {
   const [artFailed, setArtFailed] = useState(false);
+  const [searching, setSearching] = useState(false);
   const track = trackOf(state);
   const playing = state.phase === 'idle' ? null : state.track;
   const artworkCandidate =
     track?.artworkUrl ??
     playing?.artworkUrl ??
     (playing?.youtube
-      ? `https://i.ytimg.com/vi/${playing.youtube.videoId}/hqdefault.jpg`
+      ? `https://i.ytimg.com/vi/${playing.youtube.videoId}/mqdefault.jpg`
       : undefined);
   useEffect(() => setArtFailed(false), [artworkCandidate]);
+  useEffect(() => setSearching(false), [playing?.key, state.phase]);
 
   if (state.phase === 'idle' || !playing) return null;
 
@@ -52,15 +109,16 @@ export function LyricsSurface({
   const subheading = track?.artist ?? playing.youtube?.music?.artist ?? playing.artist;
   const found = state.phase === 'done' && state.result.status === 'found' ? state.result : null;
   const synced = found && found.lyrics.sync !== 'none' && !isShorts;
+  const notFound =
+    state.phase === 'done' && state.result.status === 'not-found' ? state.result : null;
+  const searchTitle = notFound?.query.title ?? heading;
+  const searchArtist = notFound?.query.artist ?? subheading ?? '';
 
   let timing = '';
   if (found) {
-    if (isShorts) timing = 'Not synced (Short)';
-    else if (found.lyrics.sync === 'none') timing = 'Not synced';
-    else if (found.lyrics.autoSynced) timing = 'Auto-synced';
-    else if (found.lyrics.offsetMs)
-      timing = `Matched to video (${found.lyrics.offsetMs > 0 ? '+' : ''}${(found.lyrics.offsetMs / 1000).toFixed(1)}s)`;
-    else timing = 'Synced';
+    if (isShorts || found.lyrics.sync === 'none') timing = 'not synced';
+    else if (found.lyrics.autoSynced) timing = 'auto-synced';
+    else if (found.lyrics.offsetMs) timing = 'matched to video';
   }
 
   return (
@@ -91,56 +149,63 @@ export function LyricsSurface({
         </div>
       </header>
 
+      {searching && !notFound && (
+        <SearchForm
+          initialTitle={searchTitle}
+          initialArtist={searchArtist}
+          onSearch={(t, a) => {
+            setSearching(false);
+            onSearch(t, a);
+          }}
+          onCancel={() => setSearching(false)}
+        />
+      )}
+
       <div class="body">
         {state.phase === 'loading' && (
           <div class="status">
             <Dots />
-            <p>Searching for lyrics…</p>
           </div>
         )}
         {state.phase === 'skipped' && (
           <div class="status">
-            <p class="big-text">This doesn't look like a music video</p>
-            <button type="button" class="action" onClick={onSearchAnyway}>
-              Search lyrics anyway
+            <p>Not a music video?</p>
+            <button type="button" class="pill" onClick={onSearchAnyway}>
+              Find lyrics anyway
             </button>
           </div>
         )}
-        {state.phase === 'done' && state.result.status === 'found' && (
+        {found && (
           <LyricsView
-            lyrics={state.result.lyrics}
+            lyrics={found.lyrics}
             playback={playback}
             unsyncedNotice={
-              isShorts && state.result.lyrics.sync !== 'none'
-                ? "Shorts play a clip of the song, so lyrics aren't synced"
+              isShorts && found.lyrics.sync !== 'none'
+                ? "Shorts play a clip, so lyrics aren't synced"
                 : undefined
             }
           />
         )}
         {state.phase === 'done' && state.result.status === 'instrumental' && (
           <div class="status">
-            <p class="big">♪</p>
-            <p>Instrumental</p>
+            <p>♪ Instrumental</p>
           </div>
         )}
-        {state.phase === 'done' && state.result.status === 'not-found' && (
+        {notFound && (
           <div class="status">
-            <p class="big-text">No lyrics found</p>
-            <p class="hint">
-              Searched LRCLIB, NetEase, YouTube captions and the web for “{state.result.query.title}
-              ”{state.result.query.artist && ` by ${state.result.query.artist}`}
-            </p>
-            <button type="button" class="action" onClick={onRetry}>
-              Try again
-            </button>
+            <p>No lyrics found. Try a different title:</p>
+            <SearchForm
+              initialTitle={searchTitle}
+              initialArtist={searchArtist}
+              onSearch={onSearch}
+            />
           </div>
         )}
         {state.phase === 'done' && state.result.status === 'error' && (
           <div class="status">
-            <p class="big-text">Couldn't load lyrics</p>
-            <p class="hint">{state.result.message}</p>
-            <button type="button" class="action" onClick={onRetry}>
-              Try again
+            <p>Couldn't load lyrics</p>
+            <button type="button" class="pill" onClick={onRetry}>
+              Retry
             </button>
           </div>
         )}
@@ -148,24 +213,36 @@ export function LyricsSurface({
 
       {found && (
         <footer class="footer">
-          <span class="source">
-            {SOURCE_LABELS[found.lyrics.source]} · {timing}
+          <span class="source" title={`Lyrics from ${SOURCE_LABELS[found.lyrics.source]}`}>
+            {SOURCE_LABELS[found.lyrics.source]}
+            {timing && ` · ${timing}`}
           </span>
-          {synced && (
-            <span class="nudge" title="Adjust timing if lyrics run early or late">
-              <button type="button" onClick={() => onNudge(-250)} aria-label="Lyrics earlier">
-                −
-              </button>
-              <span class="nudge-value">
-                {userOffset === 0
-                  ? '0.00s'
-                  : `${userOffset > 0 ? '+' : ''}${(userOffset / 1000).toFixed(2)}s`}
+          <span class="tools">
+            {synced && (
+              <span class="nudge" title="Shift lyrics if they run early or late">
+                <button
+                  type="button"
+                  onClick={() => onNudge(-250)}
+                  aria-label="Show lyrics earlier"
+                >
+                  −
+                </button>
+                <span class="nudge-value">{formatOffset(userOffset)}</span>
+                <button type="button" onClick={() => onNudge(250)} aria-label="Show lyrics later">
+                  +
+                </button>
               </span>
-              <button type="button" onClick={() => onNudge(250)} aria-label="Lyrics later">
-                +
-              </button>
-            </span>
-          )}
+            )}
+            <button
+              type="button"
+              class="tool"
+              onClick={() => setSearching((s) => !s)}
+              title="Wrong lyrics? Search"
+              aria-label="Wrong lyrics? Search"
+            >
+              ⌕
+            </button>
+          </span>
         </footer>
       )}
     </section>

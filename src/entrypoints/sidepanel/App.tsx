@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import { SUPPORTED_SITE_NAMES } from '@/core/agent/sites';
 import { type ScriptMode, scriptModeSetting } from '@/core/settings';
@@ -8,10 +8,10 @@ import type { Playback } from '@/ui/LyricsView';
 import { useAgent } from '@/ui/use-agent';
 import { useLyrics } from '@/ui/use-lyrics';
 
-const SCRIPT_OPTIONS: { value: ScriptMode; label: string; hint: string }[] = [
-  { value: 'romanized', label: 'English letters', hint: 'Hinglish, romaji… e.g. “Tum hi ho”' },
-  { value: 'both', label: 'Both', hint: 'English letters with the original underneath' },
-  { value: 'original', label: 'Original script', hint: 'e.g. “तुम ही हो”' },
+const SCRIPT_OPTIONS: { value: ScriptMode; label: string; title: string }[] = [
+  { value: 'romanized', label: 'English', title: 'English letters, e.g. “Tum hi ho”' },
+  { value: 'both', label: 'Both', title: 'English letters with the original underneath' },
+  { value: 'original', label: 'Original', title: 'Original script, e.g. “तुम ही हो”' },
 ];
 
 const ALL_SITES = { origins: ['<all_urls>'] };
@@ -33,53 +33,59 @@ function useAllSites() {
   return { granted, request, revoke };
 }
 
-function Settings({ onClose }: { onClose: () => void }) {
+/** Small settings pop-up anchored to the gear; closes on Esc or outside click. */
+function SettingsPopover({ onClose }: { onClose: () => void }) {
   const scriptMode = useSetting(scriptModeSetting);
   const allSites = useAllSites();
-  return (
-    <div class="settings">
-      <header class="settings-header">
-        <h1>Settings</h1>
-        <button type="button" class="icon-button" onClick={onClose} aria-label="Close settings">
-          ×
-        </button>
-      </header>
+  const ref = useRef<HTMLDivElement>(null);
 
-      <fieldset class="group">
-        <legend>Non-English lyrics</legend>
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onPointer = (e: PointerEvent) => {
+      const target = e.target as Element | null;
+      if (ref.current?.contains(target) || target?.closest('.settings-toggle')) return;
+      onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointer);
+    ref.current?.querySelector<HTMLElement>('button, input')?.focus();
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointer);
+    };
+  }, [onClose]);
+
+  return (
+    <div ref={ref} class="popover" role="dialog" aria-label="Settings">
+      <p class="popover-label">Non-English lyrics</p>
+      <fieldset class="segmented" aria-label="Lyrics script">
         {SCRIPT_OPTIONS.map((option) => (
-          <label key={option.value} class="option">
-            <input
-              type="radio"
-              name="script"
-              checked={scriptMode === option.value}
-              onChange={() => scriptModeSetting.setValue(option.value)}
-            />
-            <span>
-              <strong>{option.label}</strong>
-              <small>{option.hint}</small>
-            </span>
-          </label>
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={scriptMode === option.value}
+            class={scriptMode === option.value ? 'selected' : ''}
+            title={option.title}
+            onClick={() => scriptModeSetting.setValue(option.value)}
+          >
+            {option.label}
+          </button>
         ))}
       </fieldset>
 
-      <fieldset class="group">
-        <legend>Websites</legend>
-        <p class="hint">Works out of the box on {SUPPORTED_SITE_NAMES.join(', ')}.</p>
-        <label class="option">
-          <input
-            type="checkbox"
-            checked={allSites.granted}
-            onChange={(e) => (e.currentTarget.checked ? allSites.request() : allSites.revoke())}
-          />
-          <span>
-            <strong>Every other website too</strong>
-            <small>
-              Any site that plays music with media controls. Reload open tabs afterwards.
-            </small>
-          </span>
-        </label>
-      </fieldset>
+      <label class="switch-row" title={`Built in: ${SUPPORTED_SITE_NAMES.join(', ')}`}>
+        <span>
+          Work on all websites
+          <small>Built in for YouTube, Spotify &amp; {SUPPORTED_SITE_NAMES.length - 2} more</small>
+        </span>
+        <input
+          type="checkbox"
+          role="switch"
+          aria-checked={allSites.granted}
+          checked={allSites.granted}
+          onChange={(e) => (e.currentTarget.checked ? allSites.request() : allSites.revoke())}
+        />
+      </label>
     </div>
   );
 }
@@ -93,20 +99,13 @@ function EmptyState({
   onReload: () => void;
   onEnableAllSites: () => void;
 }) {
-  if (status === 'connecting') {
-    return (
-      <div class="empty">
-        <p class="hint">Connecting to this tab…</p>
-      </div>
-    );
-  }
+  if (status === 'connecting') return <div class="empty" />;
   if (status === 'needs-reload') {
     return (
       <div class="empty">
-        <p class="big-text">Reload this tab to start</p>
-        <p class="hint">The page was open before Lyricy was installed or updated.</p>
-        <button type="button" class="action" onClick={onReload}>
-          Reload tab
+        <p>Reload this tab to show lyrics.</p>
+        <button type="button" class="pill" onClick={onReload}>
+          Reload
         </button>
       </div>
     );
@@ -114,20 +113,16 @@ function EmptyState({
   if (status === 'unsupported') {
     return (
       <div class="empty">
-        <p class="big-text">Play some music</p>
-        <p class="hint">
-          Open {SUPPORTED_SITE_NAMES.slice(0, 4).join(', ')} or another music site in this tab.
-        </p>
-        <button type="button" class="action secondary" onClick={onEnableAllSites}>
-          Enable Lyricy on all websites
+        <p>No music on this tab.</p>
+        <button type="button" class="link" onClick={onEnableAllSites}>
+          Enable on all websites
         </button>
       </div>
     );
   }
   return (
     <div class="empty">
-      <p class="big-text">Nothing playing</p>
-      <p class="hint">Play a song in this tab and its lyrics will appear here.</p>
+      <p>Play a song to see its lyrics.</p>
     </div>
   );
 }
@@ -140,13 +135,13 @@ export function App() {
 
   const track = agent.snapshot?.track ?? null;
   const site = agent.snapshot?.site ?? 'other';
-  const { state, retry, searchAnyway } = useLyrics(track, site, agent.captions);
+  const { state, retry, searchAnyway, searchManual } = useLyrics(track, site, agent.captions);
   const key = track?.key ?? '';
   const userOffset = offsets[key] ?? 0;
 
   const playback = useMemo<Playback>(
     () => ({
-      // Positive offset = lyrics later; so read the clock earlier.
+      // Positive offset = lyrics later, so read the clock earlier.
       now: () => agent.now() - userOffset,
       seek: (ms) => agent.seek(ms + userOffset),
     }),
@@ -157,6 +152,7 @@ export function App() {
     (delta: number) => setOffsets((o) => ({ ...o, [key]: (o[key] ?? 0) + delta })),
     [key],
   );
+  const closeSettings = useCallback(() => setShowSettings(false), []);
 
   return (
     <main class="app">
@@ -165,14 +161,14 @@ export function App() {
         class="icon-button settings-toggle"
         onClick={() => setShowSettings((s) => !s)}
         aria-label="Settings"
+        aria-expanded={showSettings}
         title="Settings"
       >
         ⚙
       </button>
+      {showSettings && <SettingsPopover onClose={closeSettings} />}
 
-      {showSettings ? (
-        <Settings onClose={() => setShowSettings(false)} />
-      ) : agent.status === 'connected' && track ? (
+      {agent.status === 'connected' && track ? (
         <LyricsSurface
           state={state}
           playback={playback}
@@ -181,6 +177,7 @@ export function App() {
           onNudge={nudge}
           onRetry={retry}
           onSearchAnyway={searchAnyway}
+          onSearch={searchManual}
         />
       ) : (
         <EmptyState
