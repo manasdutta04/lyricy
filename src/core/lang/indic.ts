@@ -464,14 +464,18 @@ function parseWord(word: string, t: Table): Unit[] {
 const hasVowel = (u: Unit | undefined) =>
   !!u && (u.kind === 'V' || (u.kind === 'C' && u.vowel !== null));
 
-function deleteSchwas(units: Unit[]): void {
+function deleteSchwas(units: Unit[], t: Table): void {
   const consonantCount = units.filter((u) => u.kind === 'C').length;
   const last = units[units.length - 1];
+  const beforeLast = units[units.length - 2];
+  // Bengali keeps the final "o" after a consonant cluster: মন্ত্র → montro, not montr.
+  const finalCluster = t.inherent === 'o' && beforeLast?.kind === 'C' && beforeLast.vowel === null;
   // Word-final schwa: "दिल" → dil. Keep it in one-letter words ("न" → na).
   if (
     last?.kind === 'C' &&
     last.vowel === INHERENT &&
     consonantCount > 1 &&
+    !finalCluster &&
     !last.nasal &&
     !last.ng
   ) {
@@ -559,7 +563,7 @@ export function transliterateIndicWord(input: string): string {
   const override = t.words[word.normalize('NFC')];
   if (override) return override;
   const units = parseWord(word, t);
-  deleteSchwas(units);
+  deleteSchwas(units, t);
   return render(units, t);
 }
 

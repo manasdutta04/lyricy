@@ -42,6 +42,8 @@ describe('transliterateIndic (Hinglish)', () => {
     ['মনে পড়ে', 'mone pore'],
     ['চোখের জল', 'chokher jol'],
     ['সত্যি', 'sotyi'],
+    ['মন্ত্র তন্ত্র', 'montro tontro'],
+    ['ভক্ত', 'bhokto'],
   ])('Bengali %s → %s', (input, expected) => {
     expect(transliterateIndic(input)).toBe(expected);
   });
