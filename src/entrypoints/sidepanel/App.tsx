@@ -12,9 +12,9 @@ import { useFloatingWindow } from '@/ui/use-floating-window';
 import { useLyrics } from '@/ui/use-lyrics';
 
 const SCRIPT_OPTIONS: { value: ScriptMode; label: string; title: string }[] = [
-  { value: 'romanized', label: 'English', title: 'English letters, e.g. “Tum hi ho”' },
   { value: 'both', label: 'Both', title: 'English letters with the original underneath' },
-  { value: 'original', label: 'Original', title: 'Original script, e.g. “तुम ही हो”' },
+  { value: 'romanized', label: 'English', title: 'English letters only, e.g. “Tum hi ho”' },
+  { value: 'original', label: 'Original', title: 'Original script only, e.g. “तुम ही हो”' },
 ];
 
 const ALL_SITES = { origins: ['<all_urls>'] };
@@ -60,7 +60,7 @@ function SettingsPopover({ onClose }: { onClose: () => void }) {
 
   return (
     <div ref={ref} class="popover" role="dialog" aria-label="Settings">
-      <p class="popover-label">Non-English lyrics</p>
+      <p class="popover-label">Lyrics</p>
       <fieldset class="segmented" aria-label="Lyrics script">
         {SCRIPT_OPTIONS.map((option) => (
           <button
@@ -77,10 +77,7 @@ function SettingsPopover({ onClose }: { onClose: () => void }) {
       </fieldset>
 
       <label class="switch-row" title={`Built in: ${SUPPORTED_SITE_NAMES.join(', ')}`}>
-        <span>
-          Work on all websites
-          <small>Built in for YouTube, Spotify &amp; {SUPPORTED_SITE_NAMES.length - 2} more</small>
-        </span>
+        <span>Any website</span>
         <input
           type="checkbox"
           role="switch"
@@ -133,28 +130,20 @@ function EmptyState({
 export function App() {
   const agent = useAgent();
   const [showSettings, setShowSettings] = useState(false);
-  const [offsets, setOffsets] = useState<Record<string, number>>({});
   const allSites = useAllSites();
 
   const site = agent.snapshot?.site ?? 'other';
   // In a jukebox/medley video, the current chapter is the song.
   const { track, startMs } = useChapterTrack(agent.snapshot?.track ?? null, agent.now);
-  const { state, retry, searchAnyway, searchManual } = useLyrics(track, site, agent.captions);
-  const key = track?.key ?? '';
-  const userOffset = offsets[key] ?? 0;
+  const { state, retry, searchAnyway } = useLyrics(track, site, agent.captions);
 
   const playback = useMemo<Playback>(
     () => ({
-      // Time within the current song; a positive offset shows lyrics later.
-      now: () => agent.now() - startMs - userOffset,
-      seek: (ms) => agent.seek(ms + startMs + userOffset),
+      // Time within the current song (a jukebox chapter starts at startMs).
+      now: () => agent.now() - startMs,
+      seek: (ms) => agent.seek(ms + startMs),
     }),
-    [agent.now, agent.seek, startMs, userOffset],
-  );
-
-  const nudge = useCallback(
-    (delta: number) => setOffsets((o) => ({ ...o, [key]: (o[key] ?? 0) + delta })),
-    [key],
+    [agent.now, agent.seek, startMs],
   );
   const closeSettings = useCallback(() => setShowSettings(false), []);
   const floating = useFloatingWindow();
@@ -165,11 +154,8 @@ export function App() {
         state={state}
         playback={playback}
         isShorts={track.youtube?.isShorts}
-        userOffset={userOffset}
-        onNudge={nudge}
         onRetry={retry}
         onSearchAnyway={searchAnyway}
-        onSearch={searchManual}
       />
     ) : (
       <EmptyState
