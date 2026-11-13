@@ -59,7 +59,7 @@ button {
 
 .app .header {
   gap: 10px;
-  padding: 14px 52px 6px 16px;
+  padding: 14px 84px 6px 16px;
 }
 
 .app .art {
@@ -383,4 +383,20 @@ button {
   .popover {
     animation: none;
   }
+}
+
+.float-toggle {
+  position: absolute;
+  top: 18px;
+  right: 44px;
+  z-index: 6;
+}
+
+/* The floating window is narrow: smaller header, lyrics first. */
+body.floating .app .header {
+  padding: 12px 16px 4px;
+}
+
+body.floating .app .line {
+  font-size: clamp(20px, 7vw, 30px);
 }

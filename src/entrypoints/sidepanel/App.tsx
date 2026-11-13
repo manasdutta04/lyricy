@@ -1,3 +1,4 @@
+import { createPortal } from 'preact/compat';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import { SUPPORTED_SITE_NAMES } from '@/core/agent/sites';
@@ -7,6 +8,7 @@ import { LyricsSurface } from '@/ui/LyricsSurface';
 import type { Playback } from '@/ui/LyricsView';
 import { useAgent } from '@/ui/use-agent';
 import { useChapterTrack } from '@/ui/use-chapter-track';
+import { useFloatingWindow } from '@/ui/use-floating-window';
 import { useLyrics } from '@/ui/use-lyrics';
 
 const SCRIPT_OPTIONS: { value: ScriptMode; label: string; title: string }[] = [
@@ -137,11 +139,7 @@ export function App() {
   const site = agent.snapshot?.site ?? 'other';
   // In a jukebox/medley video, the current chapter is the song.
   const { track, startMs } = useChapterTrack(agent.snapshot?.track ?? null, agent.now);
-  const { state, retry, searchAnyway, searchManual, loadYouTubeCaptions } = useLyrics(
-    track,
-    site,
-    agent.captions,
-  );
+  const { state, retry, searchAnyway, searchManual } = useLyrics(track, site, agent.captions);
   const key = track?.key ?? '';
   const userOffset = offsets[key] ?? 0;
 
@@ -159,9 +157,45 @@ export function App() {
     [key],
   );
   const closeSettings = useCallback(() => setShowSettings(false), []);
+  const floating = useFloatingWindow();
+
+  const content =
+    agent.status === 'connected' && track ? (
+      <LyricsSurface
+        state={state}
+        playback={playback}
+        isShorts={track.youtube?.isShorts}
+        userOffset={userOffset}
+        onNudge={nudge}
+        onRetry={retry}
+        onSearchAnyway={searchAnyway}
+        onSearch={searchManual}
+      />
+    ) : (
+      <EmptyState
+        status={agent.status === 'connected' ? 'idle' : agent.status}
+        onReload={agent.reloadTab}
+        onEnableAllSites={allSites.request}
+      />
+    );
 
   return (
     <main class="app">
+      {floating.supported && (
+        <button
+          type="button"
+          class="icon-button float-toggle"
+          onClick={floating.win ? floating.close : floating.open}
+          aria-label={floating.win ? 'Close floating lyrics' : 'Floating lyrics window'}
+          title={
+            floating.win
+              ? 'Bring lyrics back to the side panel'
+              : 'Floating lyrics window (stays on top, even in fullscreen)'
+          }
+        >
+          ⧉
+        </button>
+      )}
       <button
         type="button"
         class="icon-button settings-toggle"
@@ -174,24 +208,18 @@ export function App() {
       </button>
       {showSettings && <SettingsPopover onClose={closeSettings} />}
 
-      {agent.status === 'connected' && track ? (
-        <LyricsSurface
-          state={state}
-          playback={playback}
-          isShorts={track.youtube?.isShorts}
-          userOffset={userOffset}
-          onNudge={nudge}
-          onRetry={retry}
-          onSearchAnyway={searchAnyway}
-          onSearch={searchManual}
-          onUseCaptions={site === 'youtube' ? loadYouTubeCaptions : undefined}
-        />
+      {floating.win ? (
+        <>
+          <div class="empty">
+            <p>Lyrics are in the floating window.</p>
+            <button type="button" class="pill" onClick={floating.close}>
+              Bring them back
+            </button>
+          </div>
+          {createPortal(<main class="app">{content}</main>, floating.win.document.body)}
+        </>
       ) : (
-        <EmptyState
-          status={agent.status === 'connected' ? 'idle' : agent.status}
-          onReload={agent.reloadTab}
-          onEnableAllSites={allSites.request}
-        />
+        content
       )}
     </main>
   );
