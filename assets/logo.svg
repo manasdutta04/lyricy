@@ -1,40 +1,34 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 128 128" role="img" aria-label="Lyricy">
+  <!-- An "L" that turns into a sound wave as it sweeps right: the letter sings. -->
   <defs>
-    <!-- Warm coral → magenta → violet, like stage light on a lyric sheet. -->
-    <linearGradient id="bg" x1="12" y1="6" x2="118" y2="124" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FF7A59"/>
-      <stop offset="0.48" stop-color="#FF2D6F"/>
-      <stop offset="1" stop-color="#7A2CF5"/>
-    </linearGradient>
-    <!-- Soft highlight across the top for depth. -->
-    <linearGradient id="sheen" x1="64" y1="0" x2="64" y2="70" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.22"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
-    </linearGradient>
-    <!-- The line being sung: bright where it's sung, dim after the playhead. -->
-    <linearGradient id="fill" x1="26" y1="0" x2="104" y2="0" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="0.62" stop-color="#FFFFFF"/>
-      <stop offset="0.7" stop-color="#FFFFFF" stop-opacity="0.42"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.42"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(76 64) scale(15)">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.9"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    <radialGradient id="bg" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(30 22) rotate(48) scale(150)">
+      <stop offset="0" stop-color="#2A1A2E"/>
+      <stop offset="0.6" stop-color="#15101B"/>
+      <stop offset="1" stop-color="#0E0B13"/>
     </radialGradient>
+    <linearGradient id="ribbon" x1="34" y1="24" x2="108" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFC15E"/>
+      <stop offset="0.45" stop-color="#FF6A5C"/>
+      <stop offset="1" stop-color="#D24BFF"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
 
   <rect width="128" height="128" rx="30" fill="url(#bg)"/>
-  <rect width="128" height="128" rx="30" fill="url(#sheen)"/>
 
-  <!-- Previous line (dim) -->
-  <rect x="26" y="34" width="58" height="13" rx="6.5" fill="#FFFFFF" fill-opacity="0.38"/>
-  <!-- Current line, filling word by word -->
-  <rect x="26" y="57.5" width="78" height="13" rx="6.5" fill="url(#fill)"/>
-  <!-- Next line (dimmer) -->
-  <rect x="26" y="81" width="44" height="13" rx="6.5" fill="#FFFFFF" fill-opacity="0.26"/>
+  <g filter="url(#glow)" opacity="0.55">
+    <path d="M38 26 V72 C38 88 47 96 58 96 C70 96 66 64 86 64 C102 64 101 86 108 86"
+          fill="none" stroke="url(#ribbon)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <path d="M38 26 V72 C38 88 47 96 58 96 C70 96 66 64 86 64 C102 64 101 86 108 86"
+        fill="none" stroke="url(#ribbon)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <!-- Playhead: where the singer is right now -->
-  <circle cx="76" cy="64" r="15" fill="url(#glow)"/>
-  <circle cx="76" cy="64" r="7.5" fill="#FFFFFF"/>
+  <!-- A single bright note above the wave -->
+  <circle cx="100" cy="36" r="7" fill="#FFE2B0"/>
 </svg>
