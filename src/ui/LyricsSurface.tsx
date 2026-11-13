@@ -108,7 +108,7 @@ export function LyricsSurface({
   const heading = track?.title ?? playing.youtube?.music?.title ?? playing.title;
   const subheading = track?.artist ?? playing.youtube?.music?.artist ?? playing.artist;
   const found = state.phase === 'done' && state.result.status === 'found' ? state.result : null;
-  const synced = found && found.lyrics.sync !== 'none' && !isShorts;
+  const synced = found && found.lyrics.sync !== 'none' && !isShorts && !found.lyrics.videoMismatch;
   const notFound =
     state.phase === 'done' && state.result.status === 'not-found' ? state.result : null;
   const searchTitle = notFound?.query.title ?? heading;
@@ -116,7 +116,8 @@ export function LyricsSurface({
 
   let timing = '';
   if (found) {
-    if (isShorts || found.lyrics.sync === 'none') timing = 'not synced';
+    if (isShorts) timing = 'not synced';
+    else if (found.lyrics.sync === 'none' || found.lyrics.videoMismatch) timing = 'follows along';
     else if (found.lyrics.autoSynced) timing = 'auto-synced';
     else if (found.lyrics.offsetMs) timing = 'matched to video';
   }
@@ -179,6 +180,7 @@ export function LyricsSurface({
           <LyricsView
             lyrics={found.lyrics}
             playback={playback}
+            durationMs={(playing.durationSec ?? 0) * 1000 || undefined}
             unsyncedNotice={
               isShorts && found.lyrics.sync !== 'none'
                 ? "Shorts play a clip, so lyrics aren't synced"
