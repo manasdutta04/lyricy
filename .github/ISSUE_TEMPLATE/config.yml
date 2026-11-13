@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Installation help
+    url: https://github.com/manasdutta04/lyricy/blob/main/INSTALL.md
+    about: Step-by-step install guide and troubleshooting.
+  - name: Report a security issue
+    url: https://github.com/manasdutta04/lyricy/security/advisories/new
+    about: Please report security problems privately.

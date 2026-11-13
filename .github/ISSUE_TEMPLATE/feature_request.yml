@@ -1,0 +1,22 @@
+name: Feature idea
+description: Suggest a new feature, site or language.
+title: "[Idea] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would it solve?
+      description: Describe what you're trying to do and what gets in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How would you like it to work?
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: Examples, screenshots, or other apps that do it well.

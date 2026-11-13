@@ -1,0 +1,42 @@
+name: Wrong or missing lyrics
+description: Lyrics are missing, belong to another song, or are out of sync.
+title: "[Lyrics] "
+labels: ["lyrics"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks! Each report like this usually becomes a test case, so the more exact the better.
+  - type: input
+    id: url
+    attributes:
+      label: Song link
+      description: The YouTube / YouTube Music / Spotify (or other) link where it happens.
+      placeholder: https://www.youtube.com/watch?v=...
+    validations:
+      required: true
+  - type: dropdown
+    id: problem
+    attributes:
+      label: What's wrong?
+      options:
+        - No lyrics found
+        - Lyrics of a different song
+        - Lyrics are early or late
+        - Lyrics get stuck or jump
+        - Wrong spelling in English letters (transliteration)
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Where in the song does it go wrong (time, e.g. 1:42)? What did you expect? A screenshot of the side panel helps.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Lyricy version
+      description: Shown on Lyricy's card in chrome://extensions.
+      placeholder: 0.1.0

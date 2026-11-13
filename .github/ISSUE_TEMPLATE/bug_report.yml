@@ -1,0 +1,48 @@
+name: Bug report
+description: Something in Lyricy doesn't work (not about specific lyrics).
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Click the Lyricy icon
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: Chrome 142 on Windows 11
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Lyricy version
+      description: Shown on Lyricy's card in chrome://extensions.
+      placeholder: 0.1.0
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - Release zip
+        - Built from source
+  - type: textarea
+    id: logs
+    attributes:
+      label: Errors (optional)
+      description: On chrome://extensions, Lyricy's card may show an "Errors" button. Paste what it shows.
+      render: text
