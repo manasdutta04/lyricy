@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { cleanChannelName, parseVideoTitle, stripHashtagsAndEmoji } from './title-parser';
+import {
+  channelArtist,
+  cleanChannelName,
+  parseVideoTitle,
+  stripHashtagsAndEmoji,
+} from './title-parser';
 
 describe('parseVideoTitle', () => {
   it('uses the channel to detect "Song - Artist" order', () => {
@@ -158,5 +163,13 @@ describe('cleanChannelName', () => {
     ['Coldplay Official', 'Coldplay'],
   ])('%s → %s', (input, expected) => {
     expect(cleanChannelName(input)).toBe(expected);
+  });
+});
+
+describe('Bengali label channels', () => {
+  it('does not treat SVF or Amara Muzik as the artist', () => {
+    expect(channelArtist('SVF')).toBe('');
+    expect(channelArtist('Amara Muzik Bengali')).toBe('');
+    expect(channelArtist('Anupam Roy')).toBe('Anupam Roy');
   });
 });

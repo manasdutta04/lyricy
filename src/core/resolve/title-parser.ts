@@ -49,7 +49,7 @@ const MAX_NAME_GUESSES = 4;
 
 /** Channels that upload many artists' songs: their name says nothing about the artist. */
 const LABEL_CHANNEL =
-  /\b(t-?series|sony music|zee music|tips (official|music)|saregama|yrf|speed records|desi melodies|white hill|times music|eros now|shemaroo|venus|aditya music|lahari|think music|sun music|universal music|warner music|atlantic records|coke studio|geet mp3|jjust music|panorama music|vyrl|bollywood|lyrics?|records?|music company|entertainment|films|studios?|productions?|channel|songs?|hits|melod(y|ies)|nation|world)\b/i;
+  /\b(t-?series|sony music|zee music|tips (official|music)|saregama|yrf|speed records|desi melodies|white hill|times music|eros now|shemaroo|venus|aditya music|lahari|think music|sun music|universal music|warner music|atlantic records|coke studio|geet mp3|jjust music|panorama music|vyrl|svf|amara muzik|angel digital|eskay movies|t-series bangla|zee music bangla|sa re ga ma bangla|surinder films|bollywood|lyrics?|records?|music company|entertainment|films|studios?|productions?|channel|songs?|hits|melod(y|ies)|nation|world)\b/i;
 
 /** Strips channel-name decoration: "Artist - Topic", "ArtistVEVO", "Artist Official". */
 export function cleanChannelName(channel: string): string {
