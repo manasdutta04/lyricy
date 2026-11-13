@@ -21,6 +21,8 @@ import { channelArtist, parseVideoTitle, type TitleGuess } from './resolve/title
 
 /** iTunes hit must be at least this confident to be trusted as the canonical track. */
 export const CANONICAL_THRESHOLD = 0.72;
+/** Below canonical but still useful as clean search terms. */
+const HINT_THRESHOLD = 0.55;
 /** Lyrics below this confidence are not shown — wrong lyrics are worse than none. */
 export const ACCEPT_THRESHOLD = 0.62;
 /** An exact LRCLIB hit this good (synced, Latin) skips the other sources. */
@@ -193,7 +195,15 @@ export async function findLyrics(
 
   // 1. Canonicalize with iTunes (clean names, real track length, artwork).
   let canonical: TrackInfo | undefined;
-  const terms = [...new Set([firstTerm, guesses.find((g) => !g.artist)?.title ?? first.title])];
+  const named = guesses.find((g) => g.artist && g !== first);
+  const namedTerm = named ? `${named.artist} ${named.title}` : undefined;
+  const terms = [
+    ...new Set(
+      [firstTerm, namedTerm, guesses.find((g) => !g.artist)?.title ?? first.title].filter(
+        (t): t is string => Boolean(t),
+      ),
+    ),
+  ].slice(0, 3);
   const itunes = (await Promise.all(terms.map((t) => settle(searchItunes(t, deps.fetch))))).flatMap(
     (r) => r ?? [],
   );
@@ -205,13 +215,25 @@ export async function findLyrics(
       canonical = t;
     }
   }
+  // A near-miss is still a good *search hint* (clean names), just not trusted for scoring.
+  const hint = canonical && canonicalScore >= HINT_THRESHOLD ? canonical : undefined;
   if (canonicalScore < CANONICAL_THRESHOLD) canonical = undefined;
-  log('itunes', canonical?.artist, '—', canonical?.title, canonicalScore.toFixed(2));
+  log(
+    'itunes',
+    hint?.artist,
+    '—',
+    hint?.title,
+    canonicalScore.toFixed(2),
+    canonical ? 'trusted' : 'hint',
+  );
 
   const queries: MatchQuery[] = canonical
     ? [{ ...canonical, durationKind: 'tight' }, ...videoQueries]
     : videoQueries;
-  const searchTerm = canonical ? `${canonical.artist} ${canonical.title}` : firstTerm;
+  const hintTerm = hint ? `${hint.artist} ${hint.title}` : undefined;
+  const searchTerms = [
+    ...new Set([hintTerm, firstTerm, namedTerm].filter((t): t is string => Boolean(t))),
+  ];
 
   // 2. Gather candidates from every provider.
   const candidates = new Map<string, Candidate>();
@@ -242,24 +264,19 @@ export async function findLyrics(
 
   if (!exactGood) {
     const lrclib: Promise<LrclibRecord[] | undefined>[] = [];
-    if (canonical) {
-      lrclib.push(
-        settle(lrclibSearch({ title: canonical.title, artist: canonical.artist }, deps.fetch)),
-      );
+    if (hint) {
+      lrclib.push(settle(lrclibSearch({ title: hint.title, artist: hint.artist }, deps.fetch)));
     }
-    for (const g of guesses.slice(0, 2)) {
+    for (const g of guesses.slice(0, 3)) {
       lrclib.push(
         settle(lrclibSearch({ title: g.title, artist: g.artist || undefined }, deps.fetch)),
       );
     }
-    lrclib.push(settle(lrclibSearch({ q: searchTerm }, deps.fetch)));
-    if (searchTerm !== firstTerm) lrclib.push(settle(lrclibSearch({ q: firstTerm }, deps.fetch)));
+    for (const term of searchTerms) lrclib.push(settle(lrclibSearch({ q: term }, deps.fetch)));
 
     const netease = (async () => {
       const songs = (
-        await Promise.all(
-          [...new Set([searchTerm, firstTerm])].map((t) => settle(neteaseSearch(t, deps.fetch))),
-        )
+        await Promise.all(searchTerms.map((t) => settle(neteaseSearch(t, deps.fetch))))
       ).flatMap((r) => r ?? []);
       const unique = [...new Map(songs.map((s) => [s.id, s])).values()];
       const top = unique
@@ -319,8 +336,9 @@ export async function findLyrics(
 
   // 4. Fallbacks: the video's own captions, then plain lyrics from the web.
   if (!lyrics) lyrics = captionsLyrics(video);
-  if (!lyrics && canonical) {
-    const plain = await settle(lyricsOvh(canonical.artist, canonical.title, deps.fetch));
+  const plainSource = canonical ?? hint;
+  if (!lyrics && plainSource) {
+    const plain = await settle(lyricsOvh(plainSource.artist, plainSource.title, deps.fetch));
     if (plain) lyrics = { sync: 'none', lines: parsePlain(plain), source: 'lyrics.ovh' };
   }
   if (!lyrics?.lines.length) {
