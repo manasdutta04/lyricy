@@ -277,9 +277,23 @@ A **golden test set** (videoId → expected track + reference offset) runs in CI
 **D. Then:** word-by-word fill (Phase 2 animator) and a check that Spotify/JioSaavn timing works.
 
 ### Progress (2026-11-13)
+
 - **A. Matching, done.** Handles "Film: Song" and "Song : Singers" titles, drops "(Song)", "(From …)" and a trailing "Song", splits capital-"I" separators, tries each credited singer, and reads only real "Music in this video" cards (album line required, people cards ignored). Length isn't held against shortened edits. A near-miss iTunes result is used as a search hint. A title gate stops "right artist, wrong song" matches.
 - **Benchmark:** 48 real label uploads (`src/core/__fixtures__/real-uploads.json`, `pipeline.bench.live.test.ts`): 45/48 found (94%), all 45 correct after fixing one wrong match (Diljit "Charmer"). The misses are a Gujarati title track, a dubbed South song and a Netflix show song, which aren't in any source.
 - **B. Settings pop-up, done.** The gear opens a small popover (script mode + all-sites switch). It closes on Esc or an outside click.
 - **C. Minimal panel, done.** 36px artwork, small one-line title, faint artwork tint, smaller lyric font, a tiny footer with the timing nudge on hover, quiet empty states.
 - **Manual search, done.** Song/artist fields for misses, plus a ⌕ button for wrong matches. Results are cached for that video.
 - **Still next:** word-by-word fill, a live check of Spotify/JioSaavn timing, and more sources for regional songs (Gujarati, Telugu/Tamil dubs).
+
+### Sync + Bengali pass (2026-11-13, later)
+- **Why lyrics drifted or got stuck:** label "(Song)" uploads are edits (e.g. *Judi Jodi* 2:36 vs the 3:59 song) and music videos have intros, while lyric sources are timed to the album track.
+- **YouTube captions can't be used.** Caption files (`timedtext`) come back empty without YouTube's player token, and the transcript API refuses outside requests. So the caption-based auto-sync/offset code stays in, but it rarely gets data.
+- **Fixes:**
+  - Among uploads of the same song, prefer the one whose length matches the video (many LRCLIB entries were synced to the YouTube cut).
+  - When nothing matches within 10 s, show **follow-along** mode: lyrics scroll with playback progress, with no line highlighting that would be wrong.
+- **Sources:** JioSaavn added as a plain-lyrics fallback (often already Hinglish).
+- **Bengali:**
+  - Bengali → English letters ("Bengalish": আমি তোমাকে ভালোবাসি → *ami tomake bhalobashi*).
+  - Mixed English/Bengali lines are converted too.
+  - Bengali-script title noise and duplicate brackets are ignored.
+- **Ideas for exact sync on edits:** align with the audio itself (vocal-onset detection in the page), or a community offset database keyed by video id.
