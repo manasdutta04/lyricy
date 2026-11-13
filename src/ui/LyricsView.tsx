@@ -67,7 +67,7 @@ function mainText(line: LyricLine, mode: ScriptMode): string {
 }
 
 /** Held notes (long words) get Apple's soft glow while they're sung. */
-const HELD_MS = 900;
+const HELD_MS = 1400;
 
 function SyncedLyrics({ lyrics, mode, playback }: ViewProps & { playback: Playback }) {
   const items = useMemo(
@@ -192,9 +192,11 @@ function SyncedLyrics({ lyrics, mode, playback }: ViewProps & { playback: Playba
                 style={styleFor(i)}
                 aria-hidden="true"
               >
-                <span class="dot" />
-                <span class="dot" />
-                <span class="dot" />
+                <span class="dots-group">
+                  <span class="dot" />
+                  <span class="dot" />
+                  <span class="dot" />
+                </span>
               </div>
             );
           }
@@ -217,7 +219,7 @@ function SyncedLyrics({ lyrics, mode, playback }: ViewProps & { playback: Playba
                 {item.words.map((w, wi) => (
                   <Fragment key={wi}>
                     <span class="w">{w.text.trimEnd()}</span>
-                    {/s$/.test(w.text) ? ' ' : ''}
+                    {/\s$/.test(w.text) ? ' ' : ''}
                   </Fragment>
                 ))}
               </span>
