@@ -4,13 +4,22 @@ import type { CaptionData, TrackSnapshot } from '@/core/agent/protocol';
 import type { LyricsResult, TrackInfo, VideoDetails } from '@/core/lyrics/types';
 import { requestLyrics } from '@/core/messages';
 
-/** YouTube categories we search automatically; others get a "Search anyway" button. */
-const AUTO_CATEGORIES = new Set(['Music', 'Entertainment']);
+/**
+ * Every video is searched automatically. Only these categories may use the
+ * video's own captions as lyrics, so a lecture's subtitles never show up as
+ * "lyrics" (songs from films are often filed under Film & Animation).
+ */
+const CAPTION_CATEGORIES = new Set(['Music', 'Entertainment', 'Film & Animation']);
+
+/** Whether this video's captions can stand in for lyrics. */
+export function captionsAllowed(yt: TrackSnapshot['youtube']): boolean {
+  if (!yt) return false;
+  return Boolean(yt.music) || !yt.category || CAPTION_CATEGORIES.has(yt.category);
+}
 
 export type LyricsState =
   | { phase: 'idle' }
   | { phase: 'loading'; track: TrackSnapshot }
-  | { phase: 'skipped'; track: TrackSnapshot }
   | { phase: 'done'; track: TrackSnapshot; result: LyricsResult };
 
 export function trackOf(state: LyricsState): TrackInfo | undefined {
@@ -67,7 +76,7 @@ export function isBetter(next: LyricsResult, prev: LyricsResult): boolean {
   return rank(next) > rank(prev);
 }
 
-/** One lyrics lookup per track, re-run on retry / "search anyway". */
+/** One lyrics lookup per track, re-run on retry. */
 export function useLyrics(
   track: TrackSnapshot | null,
   site: 'youtube' | 'ytmusic' | 'other',
@@ -76,7 +85,6 @@ export function useLyrics(
   const [state, setState] = useState<LyricsState>({ phase: 'idle' });
   const [attempt, setAttempt] = useState(0);
   const forceRef = useRef(false);
-  const allowRef = useRef<string | null>(null);
   const manualRef = useRef<{ key: string; title: string; artist: string } | null>(null);
   /** Videos we already asked YouTube to load captions for (don't flash CC twice). */
   const triedCaptionsRef = useRef(new Set<string>());
@@ -95,20 +103,9 @@ export function useLyrics(
 
     (async () => {
       const yt = current.youtube;
-      const gated =
-        site === 'youtube' &&
-        yt &&
-        !yt.isShorts &&
-        !yt.music &&
-        yt.category &&
-        !AUTO_CATEGORIES.has(yt.category) &&
-        allowRef.current !== key;
-      if (gated) {
-        setState({ phase: 'skipped', track: current });
-        return;
-      }
+      const useCaptions = site !== 'other' && captionsAllowed(yt);
       const getCaptions = async (load: boolean) => {
-        const captions = yt && site !== 'other' ? await fetchCaptions(key, load) : null;
+        const captions = useCaptions ? await fetchCaptions(key, load) : null;
         // In a jukebox, keep only this song's part of the captions, timed from its start.
         if (captions && yt?.isChapter && yt.chapterStartSec !== undefined) {
           return sliceCaptions(
@@ -152,6 +149,7 @@ export function useLyrics(
       const videoId = yt?.videoId;
       const tracksAvailable = Boolean(yt?.captionTracks?.length) && !yt?.isShorts;
       const tryCaptions =
+        useCaptions &&
         Boolean(videoId) &&
         tracksAvailable &&
         !captions &&
@@ -191,20 +189,15 @@ export function useLyrics(
     forceRef.current = true;
     setAttempt((n) => n + 1);
   }, []);
-  const searchAnyway = useCallback(() => {
-    allowRef.current = key;
-    setAttempt((n) => n + 1);
-  }, [key]);
   /** Search with a song title (and optional artist) the user typed. */
   const searchManual = useCallback(
     (title: string, artist: string) => {
       if (!key || !title.trim()) return;
       manualRef.current = { key, title: title.trim(), artist: artist.trim() };
-      allowRef.current = key;
       setAttempt((n) => n + 1);
     },
     [key],
   );
 
-  return { state, retry, searchAnyway, searchManual };
+  return { state, retry, searchManual };
 }

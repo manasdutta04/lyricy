@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TrackSnapshot } from '@/core/agent/protocol';
-import { toVideoDetails } from './use-lyrics';
+import { captionsAllowed, toVideoDetails } from './use-lyrics';
 
 const base: TrackSnapshot = {
   key: 'Z21oUFT9VbM',
@@ -34,5 +34,20 @@ describe('toVideoDetails', () => {
 
   it('keeps the plain video id for normal videos', () => {
     expect(toVideoDetails(base, 'youtube', null).videoId).toBe('Z21oUFT9VbM');
+  });
+});
+
+describe('captionsAllowed', () => {
+  const yt = base.youtube as NonNullable<TrackSnapshot['youtube']>;
+  it('uses captions for songs, including songs filed under films', () => {
+    expect(captionsAllowed({ ...yt, category: 'Music' })).toBe(true);
+    expect(captionsAllowed({ ...yt, category: 'Film & Animation' })).toBe(true);
+    expect(
+      captionsAllowed({ ...yt, category: 'Education', music: { title: 'a', artist: 'b' } }),
+    ).toBe(true);
+  });
+  it("never shows a lecture's subtitles as lyrics", () => {
+    expect(captionsAllowed({ ...yt, category: 'Education' })).toBe(false);
+    expect(captionsAllowed(undefined)).toBe(false);
   });
 });
