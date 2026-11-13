@@ -160,6 +160,18 @@ const DEVANAGARI: Table = {
     कहा: 'kaha',
     सा: 'sa',
     ज्ञान: 'gyaan',
+    // Names and devotional words with fixed spellings.
+    राम: 'ram',
+    सीता: 'sita',
+    श्याम: 'shyam',
+    कृष्ण: 'krishna',
+    जय: 'jai',
+    माँ: 'maa',
+    मां: 'maa',
+    भगवान: 'bhagwan',
+    शिव: 'shiv',
+    हरि: 'hari',
+    राधा: 'radha',
   },
 };
 
