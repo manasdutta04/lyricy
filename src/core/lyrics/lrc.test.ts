@@ -56,3 +56,10 @@ describe('parsePlain', () => {
     expect(parsePlain('a\n\n b \n').map((l) => l.text)).toEqual(['a', 'b']);
   });
 });
+
+describe('parseLrc wordless lines', () => {
+  it('skips lines made only of music symbols', () => {
+    const lines = parseLrc('[00:01.00]♫♫♫\n[00:04.00]Real words\n[00:06.00]...');
+    expect(lines.map((l) => l.text)).toEqual(['Real words']);
+  });
+});

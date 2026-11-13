@@ -81,7 +81,8 @@ export function parseLrc(text: string, durationMs?: number): LyricLine[] {
 
   const lines: LyricLine[] = [];
   entries.forEach((entry, i) => {
-    if (!entry.text) return;
+    // Lines with no words ("♫♫♫", "...") mark instrumental gaps, not lyrics.
+    if (!/[\p{L}\p{N}]/u.test(entry.text)) return;
     const start = Math.max(0, entry.start - offset);
     const next = entries[i + 1];
     let end: number;

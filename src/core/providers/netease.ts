@@ -51,7 +51,7 @@ export async function neteaseSearch(
 
 /** Credit lines NetEase puts at the top of LRC ("作词 : …", "Composer : …"). */
 const CREDIT =
-  /^\[[\d:.]+\]\s*(作词|作曲|编曲|制作人|制作|混音|母带|和声|吉他|贝斯|鼓|弦乐|录音|监制|出品|发行|词|曲|演唱|原唱|lyricist|lyrics by|composer|composed by|producer|produced by|arranger|arranged by|mixing|mastering|written by)\s*[:：]/i;
+  /^\[[\d:.]+\]\s*(作词|作曲|编曲|制作人|制作|混音|母带|和声|吉他|贝斯|鼓|弦乐|录音|监制|出品|发行|词|曲|演唱|原唱|lyricist|lyrics by|composer|composed by|producer|produced by|arranger|arranged by|mixing|mastering|written by|song|singers?|music|music by|lyrics|label|starring|director|cast|film|movie|album)\s*[:：]/i;
 
 export function cleanNeteaseLrc(lrc: string): string {
   return lrc
