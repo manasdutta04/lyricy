@@ -60,6 +60,7 @@ export function useLyrics(
   const [attempt, setAttempt] = useState(0);
   const forceRef = useRef(false);
   const allowRef = useRef<string | null>(null);
+  const manualRef = useRef<{ key: string; title: string; artist: string } | null>(null);
   const trackRef = useRef(track);
   trackRef.current = track;
   const key = track?.key ?? null;
@@ -89,9 +90,24 @@ export function useLyrics(
       }
       const captions = yt && site !== 'other' ? await fetchCaptions(key) : null;
       if (cancelled) return;
-      const force = forceRef.current;
+      const manual = manualRef.current?.key === key ? manualRef.current : null;
+      const force = forceRef.current || Boolean(manual);
       forceRef.current = false;
-      const result = await requestLyrics(toVideoDetails(current, site, captions), force);
+      manualRef.current = null;
+      const details = toVideoDetails(current, site, captions);
+      // A manual search replaces the song identity but keeps the video's timing data.
+      const request = manual
+        ? {
+            ...details,
+            title: manual.title,
+            author: manual.artist,
+            // A YouTube video's length may include an intro; don't hold it against matches.
+            lengthSec: site === 'youtube' ? 0 : details.lengthSec,
+            site: 'other' as const,
+            music: { title: manual.title, artist: manual.artist },
+          }
+        : details;
+      const result = await requestLyrics(request, force);
       if (!cancelled) setState({ phase: 'done', track: current, result });
     })().catch((error: unknown) => {
       if (!cancelled) {
@@ -116,6 +132,16 @@ export function useLyrics(
     allowRef.current = key;
     setAttempt((n) => n + 1);
   }, [key]);
+  /** Search with a song title (and optional artist) the user typed. */
+  const searchManual = useCallback(
+    (title: string, artist: string) => {
+      if (!key || !title.trim()) return;
+      manualRef.current = { key, title: title.trim(), artist: artist.trim() };
+      allowRef.current = key;
+      setAttempt((n) => n + 1);
+    },
+    [key],
+  );
 
-  return { state, retry, searchAnyway };
+  return { state, retry, searchAnyway, searchManual };
 }
