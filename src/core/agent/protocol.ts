@@ -84,6 +84,8 @@ export interface CaptionCue {
   start: number;
   end: number;
   text: string;
+  /** Per-word timing (auto-generated captions carry a timestamp for every word). */
+  words?: { text: string; start: number; end: number }[];
 }
 
 export interface CaptionWord {

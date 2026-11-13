@@ -233,9 +233,14 @@ function captionsLyrics(video: VideoDetails): Lyrics | undefined {
   // Prefer the uploader's captions; fall back to YouTube's auto-generated ones.
   const cues = manual && manual.length >= 4 ? manual : auto && auto.length >= 4 ? auto : null;
   if (!cues) return undefined;
-  const lines: LyricLine[] = cues.map((c) => ({ start: c.start, end: c.end, text: c.text }));
+  // Keep YouTube's per-word timing so the word-by-word fill follows the singing.
+  const lines: LyricLine[] = cues.map((c) =>
+    c.words?.length
+      ? { start: c.start, end: c.end, text: c.text, words: c.words }
+      : { start: c.start, end: c.end, text: c.text },
+  );
   return {
-    sync: 'line',
+    sync: lines.some((l) => l.words?.length) ? 'word' : 'line',
     lines,
     source: 'youtube-captions',
     sourceId: video.videoId,

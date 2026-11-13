@@ -23,11 +23,66 @@ const NOISE =
   /^\s*[(（【]?\s*(music|applause|laughter|instrumental|♪+|音楽|संगीत|সঙ্গীত)\s*[)）】]?\s*$/i;
 
 function cleanCaption(text: string): string {
-  return text
-    .replace(BRACKETED, ' ')
-    .replace(/[♪♫🎵🎶]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return (
+    text
+      .replace(BRACKETED, ' ')
+      // ">>" marks a change of speaker in YouTube captions.
+      .replace(/(?:>|&gt;){2,}/g, ' ')
+      .replace(/[♪♫🎵🎶]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+}
+
+/** A caption line this short that follows the previous one closely belongs to it. */
+const FRAGMENT_WORDS = 2;
+const FRAGMENT_GAP_MS = 900;
+const MAX_LINE_WORDS = 10;
+/** How long the last word of a line is assumed to last when the next line is far off. */
+const LAST_WORD_MS = 700;
+
+/**
+ * Auto-generated captions → lyric lines timed from YouTube's own per-word
+ * timestamps (each line starts when its first word is spoken, not when the
+ * caption box appears). Stray one- or two-word fragments join the line before.
+ */
+export function parseAsrLines(json: Json3): CaptionCue[] {
+  const lines: { words: { text: string; start: number }[] }[] = [];
+  for (const event of json.events ?? []) {
+    const base = event.tStartMs ?? 0;
+    const words = (event.segs ?? [])
+      .map((seg) => ({ text: cleanCaption(seg.utf8 ?? ''), start: base + (seg.tOffsetMs ?? 0) }))
+      .filter((w) => w.text && !NOISE.test(w.text));
+    if (words.length === 0) continue;
+    const prev = lines[lines.length - 1];
+    const prevLast = prev?.words[prev.words.length - 1];
+    const isFragment =
+      prev &&
+      prevLast &&
+      words.length <= FRAGMENT_WORDS &&
+      (words[0]?.start ?? 0) - prevLast.start < FRAGMENT_GAP_MS &&
+      prev.words.length + words.length <= MAX_LINE_WORDS;
+    if (isFragment) prev.words.push(...words);
+    else lines.push({ words });
+  }
+
+  return lines.map((line, i) => {
+    const nextStart = lines[i + 1]?.words[0]?.start;
+    const lastStart = line.words[line.words.length - 1]?.start ?? 0;
+    const end = Math.min(nextStart ?? Number.POSITIVE_INFINITY, lastStart + LAST_WORD_MS * 3);
+    const words = line.words.map((w, wi) => {
+      const next = line.words[wi + 1];
+      const wordEnd = next ? next.start : Math.min(end, w.start + LAST_WORD_MS);
+      const text = wi < line.words.length - 1 ? `${w.text} ` : w.text;
+      return { text, start: w.start, end: Math.max(w.start, wordEnd) };
+    });
+    return {
+      start: words[0]?.start ?? 0,
+      end: Math.max(words[0]?.start ?? 0, end),
+      text: words.map((w) => w.text).join(''),
+      words,
+    };
+  });
 }
 
 /** Caption events → timed lines (drops [Music]-style markers and empty cues). */
@@ -82,7 +137,7 @@ function build(
   const words = asr ? parseAsrTrack(asr.json) : [];
   if (asr && words.length >= MIN_WORDS) {
     // Lines too, so auto-captions can stand in for lyrics when nothing else has them.
-    data.asr = { language: asr.language, words, cues: parseCueTrack(asr.json) };
+    data.asr = { language: asr.language, words, cues: parseAsrLines(asr.json) };
   }
   return data.manual || data.asr ? data : null;
 }
@@ -112,7 +167,12 @@ export function toCaptionData(raw: CapturedCaptions): CaptionData | null {
 const sliceCues = (cues: CaptionCue[], startMs: number, endMs: number) =>
   cues
     .filter((c) => c.start >= startMs - 500 && c.start < endMs)
-    .map((c) => ({ ...c, start: c.start - startMs, end: c.end - startMs }));
+    .map((c) => ({
+      ...c,
+      start: c.start - startMs,
+      end: c.end - startMs,
+      words: c.words?.map((w) => ({ ...w, start: w.start - startMs, end: w.end - startMs })),
+    }));
 
 /** The part of a video's captions between two times, re-timed to start at 0. */
 export function sliceCaptions(

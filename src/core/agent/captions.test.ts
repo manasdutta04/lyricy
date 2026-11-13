@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseAsrTrack, parseCueTrack, toCaptionData } from './captions';
+import { parseAsrLines, parseAsrTrack, parseCueTrack, toCaptionData } from './captions';
 
 describe('caption parsing', () => {
   it('turns uploader captions into lines and drops [Music] markers', () => {
@@ -77,5 +77,46 @@ describe('auto-generated captions', () => {
       'जय जय राम',
     ]);
     expect(data?.asr?.words.some((w) => w.text.includes('संगीत'))).toBe(false);
+  });
+});
+
+describe('word-timed caption lines', () => {
+  const json = {
+    events: [
+      {
+        tStartMs: 1000,
+        dDurationMs: 6000,
+        segs: [
+          { utf8: '>> মন' },
+          { utf8: ' তোর', tOffsetMs: 400 },
+          { utf8: ' এত', tOffsetMs: 800 },
+        ],
+      },
+      // Two-word fragment right after: joins the line above.
+      {
+        tStartMs: 2200,
+        dDurationMs: 5000,
+        segs: [{ utf8: 'ভাবনা' }, { utf8: ' কেনে', tOffsetMs: 300 }],
+      },
+      {
+        tStartMs: 6000,
+        dDurationMs: 4000,
+        segs: [
+          { utf8: '&gt;&gt; একবার' },
+          { utf8: ' কালি', tOffsetMs: 500 },
+          { utf8: ' বলে', tOffsetMs: 900 },
+        ],
+      },
+    ],
+  };
+
+  it('starts each line at its first spoken word, merges fragments and drops >>', () => {
+    const lines = parseAsrLines(json);
+    expect(lines.map((l) => l.text)).toEqual(['মন তোর এত ভাবনা কেনে', 'একবার কালি বলে']);
+    expect(lines[0]?.start).toBe(1000);
+    expect(lines[0]?.words?.map((w) => w.start)).toEqual([1000, 1400, 1800, 2200, 2500]);
+    // Ends ~2 s after its last word, so a long pause can show the interlude dots.
+    expect(lines[0]?.end).toBe(4600);
+    expect(lines[1]?.words?.[2]).toMatchObject({ text: 'বলে', start: 6900 });
   });
 });
