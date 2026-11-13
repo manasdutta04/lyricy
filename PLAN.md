@@ -313,11 +313,12 @@ A **golden test set** (videoId → expected track + reference offset) runs in CI
   - Mixes/mashups without chapters can't be split.
 
 ### YouTube closed captions + plain display (2026-11-13, night)
+
 - **Display rule (user's request):**
   - Synced lyrics play in sync.
   - Lyrics without usable timing (plain, or timed for another cut) are shown **static**, with no auto-scroll.
 - **YouTube CC, verified in a real page:**
-  - The page hooks keep a copy of caption files the *player itself* downloads when CC is on. Nothing is requested or changed by us.
+  - The page hooks keep a copy of caption files the _player itself_ downloads when CC is on. Nothing is requested or changed by us.
   - If CC is already on, captions are used automatically.
   - Otherwise a **"Use / Sync with YouTube captions"** button has the player load them (turns CC on, captures, turns it back off).
   - Tested on Despacito (79 uploader caption lines captured, CC restored) and Rick Astley (captions captured after re-toggling CC).
