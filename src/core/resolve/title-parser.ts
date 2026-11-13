@@ -1,3 +1,4 @@
+import { hasNonLatin } from '../lang/script';
 import { similarity } from '../match/similarity';
 
 export interface TitleGuess {
@@ -67,9 +68,13 @@ export function channelArtist(channel: string): string {
   return cleanChannelName(channel);
 }
 
+/** "Video", "song", "official", "lyrical", "full" written in Bengali / Hindi script. */
+const NATIVE_NOISE = /(অফিসিয়াল|ভিডিও|গানের|গান|লিরিক্যাল|ফুল|ऑफिशियल|वीडियो|गाना|गीत|लिरिकल|फुल)/g;
+
 function tidy(s: string): string {
   const cleaned = s
     .replace(NOISE_PHRASES, ' ')
+    .replace(NATIVE_NOISE, ' ')
     .replace(/\(\s*\)|\[\s*\]/g, ' ')
     .replace(/\s+/g, ' ')
     .replace(/^[\s\-–—:|,]+|[\s\-–—:|,]+$/g, '')
@@ -106,7 +111,7 @@ export function stripHashtagsAndEmoji(title: string): string {
 
 function splitNames(s: string): string[] {
   return s
-    .split(/\s*(?:,|&|\band\b|\bx\b)\s*/i)
+    .split(/\s*(?:,|&|\band\b|\bx\b|\s[-–—]\s)\s*/i)
     .map((n) => n.trim())
     .filter(Boolean);
 }
@@ -123,6 +128,13 @@ export function parseVideoTitle(rawTitle: string, channel: string): TitleGuess[]
   title = title.replace(BRACKET_GROUP, (group, inner: string) =>
     NOISE_WORDS.test(inner) ? ' ' : group,
   );
+  // "Bojhena Shey Bojhena (বোঝেনা সে বোঝেনা)": a bracket repeating the title in
+  // another script is a duplicate, not part of the song name.
+  if (/[A-Za-z]{3}/.test(title.replace(BRACKET_GROUP, ' '))) {
+    title = title.replace(BRACKET_GROUP, (group, inner: string) =>
+      hasNonLatin(inner) && !/[A-Za-z]/.test(inner) ? ' ' : group,
+    );
+  }
 
   // Pull out "feat. X": it confuses search, but helps pick the right version.
   let featured: string[] = [];
@@ -136,7 +148,9 @@ export function parseVideoTitle(rawTitle: string, channel: string): TitleGuess[]
     .split(SEGMENT_SPLIT)
     .map((s) => s.trim())
     .filter((s) => tidy(s));
-  const main = segments.find((s) => DASH_SPLIT.test(s)) ?? segments[0] ?? title;
+  // The song is almost always in the first part. A later "Artist - Uploader" part
+  // ("… || Arijit Singh - DjSumanRaJ") is treated as credits instead.
+  const main = segments[0] ?? title;
 
   const fromChannel = channelArtist(channel);
   const guesses: TitleGuess[] = [];

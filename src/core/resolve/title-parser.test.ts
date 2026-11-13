@@ -76,6 +76,28 @@ describe('parseVideoTitle', () => {
     expect(besharam?.title).toBe('Besharam Rang');
   });
 
+  it('drops native-script duplicates and noise in Bengali titles', () => {
+    const [first] = parseVideoTitle(
+      'Bojhena Shey Bojhena (বোঝেনা সে বোঝেনা) | Title Track |Soham |Abir | Payel |Mimi | Arijit Singh |SVF',
+      'SVF',
+    );
+    expect(first?.title).toBe('Bojhena Shey Bojhena');
+    const [bhromor] = parseVideoTitle(
+      'BHROMOR ভিডিও গান | অফিসিয়াল | Praktan বাংলা মুভি | Surojit চট্টোপাধ্যায়',
+      'Amara Muzik Bengali',
+    );
+    expect(bhromor?.title).toBe('BHROMOR');
+  });
+
+  it('keeps the first part as the song when a later part is "Artist - Uploader"', () => {
+    const guesses = parseVideoTitle(
+      'Jabo Na Jabo Na Phire | Reprise Version | যাবো না যাবো নাফিরে আর ঘরে || Arijit Singh - DjSumanRaJ',
+      'Dj Suman Raj',
+    );
+    expect(guesses[0]?.title).toBe('Jabo Na Jabo Na Phire');
+    expect(guesses).toContainEqual({ artist: 'Arijit Singh', title: 'Jabo Na Jabo Na Phire' });
+  });
+
   it('drops (From "Film") from the searched title', () => {
     const [first] = parseVideoTitle('Arijit Singh - Kesariya (From "Brahmastra")', 'Arijit Singh');
     expect(first).toEqual({ artist: 'Arijit Singh', title: 'Kesariya' });
