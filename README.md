@@ -1,4 +1,8 @@
-# Lyricy
+<p align="center">
+  <img src="assets/logo.svg" width="112" height="112" alt="Lyricy logo" />
+</p>
+
+<h1 align="center">Lyricy</h1>
 
 Apple Music-style, time-synced lyrics in Chrome's **side panel**, for YouTube, YouTube Music, Spotify, SoundCloud, Apple Music, JioSaavn and more. Browser extension (Manifest V3) built with [WXT](https://wxt.dev), TypeScript and Preact.
 
@@ -25,13 +29,14 @@ To load it manually: `npm run build`, then open `chrome://extensions`, turn on *
 
 ## Scripts
 
-| Script                            | What it does                     |
-| --------------------------------- | -------------------------------- |
-| `npm run build` / `build:firefox` | Production build into `.output/` |
-| `npm run zip`                     | Store-ready zip                  |
-| `npm run compile`                 | Type-check                       |
-| `npm test`                        | Unit tests (Vitest)              |
-| `npm run lint` / `format`         | Biome lint + format              |
+| Script                            | What it does                           |
+| --------------------------------- | -------------------------------------- |
+| `npm run build` / `build:firefox` | Production build into `.output/`       |
+| `npm run zip`                     | Store-ready zip                        |
+| `npm run compile`                 | Type-check                             |
+| `npm test`                        | Unit tests (Vitest)                    |
+| `npm run lint` / `format`         | Biome lint + format                    |
+| `npm run icons`                   | Re-render icons from `assets/logo.svg` |
 
 Real-network check against the lyric services: `LIVE=1 npx vitest run src/core/pipeline.live.test.ts`
 
