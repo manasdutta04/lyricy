@@ -1,4 +1,10 @@
-import type { CaptionCue, CaptionData, CaptionTrackInfo, CaptionWord } from './protocol';
+import type {
+  CaptionCue,
+  CaptionData,
+  CaptionTrackInfo,
+  CaptionWord,
+  CapturedCaptions,
+} from './protocol';
 
 interface Json3 {
   events?: {
@@ -71,4 +77,32 @@ export async function fetchCaptions(tracks: CaptionTrackInfo[]): Promise<Caption
   const words = asrJson ? parseAsrTrack(asrJson) : [];
   if (asrTrack && words.length >= 10) data.asr = { language: asrTrack.languageCode, words };
   return data.manual || data.asr ? data : null;
+}
+
+/** Captions the player downloaded (raw json3) → cues for manual captions, words for ASR. */
+export function toCaptionData(raw: CapturedCaptions): CaptionData | null {
+  const data: CaptionData = {};
+  const cues = raw.manual ? parseCueTrack(raw.manual.json as Json3) : [];
+  if (raw.manual && cues.length >= 4) data.manual = { language: raw.manual.language, cues };
+  const words = raw.asr ? parseAsrTrack(raw.asr.json as Json3) : [];
+  if (raw.asr && words.length >= 10) data.asr = { language: raw.asr.language, words };
+  return data.manual || data.asr ? data : null;
+}
+
+/** The part of a video's captions between two times, re-timed to start at 0. */
+export function sliceCaptions(
+  data: CaptionData,
+  startMs: number,
+  endMs: number,
+): CaptionData | null {
+  const sliced: CaptionData = {};
+  const cues = data.manual?.cues
+    .filter((c) => c.start >= startMs - 500 && c.start < endMs)
+    .map((c) => ({ ...c, start: c.start - startMs, end: c.end - startMs }));
+  if (data.manual && cues && cues.length >= 4) sliced.manual = { ...data.manual, cues };
+  const words = data.asr?.words
+    .filter((w) => w.start >= startMs - 500 && w.start < endMs)
+    .map((w) => ({ ...w, start: w.start - startMs }));
+  if (data.asr && words && words.length >= 10) sliced.asr = { ...data.asr, words };
+  return sliced.manual || sliced.asr ? sliced : null;
 }

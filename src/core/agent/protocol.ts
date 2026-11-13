@@ -10,6 +10,17 @@ export const AGENT_PORT = 'lyricy-agent';
 export const PAGE_SNAPSHOT_REQUEST = 'lyricy:snapshot-request';
 export const PAGE_SNAPSHOT = 'lyricy:snapshot';
 export const PAGE_SEEK = 'lyricy:seek';
+/** Ask the page hooks for captions YouTube's player has loaded (detail: video id). */
+export const PAGE_CAPTIONS_REQUEST = 'lyricy:captions-request';
+export const PAGE_CAPTIONS = 'lyricy:captions';
+/** Ask the page hooks to have the player load captions (briefly turns CC on). */
+export const PAGE_CAPTIONS_LOAD = 'lyricy:captions-load';
+
+/** Caption files the player downloaded, as raw json3, per kind. */
+export interface CapturedCaptions {
+  manual?: { language: string; json: unknown };
+  asr?: { language: string; json: unknown };
+}
 
 export type SiteKind = 'youtube' | 'ytmusic' | 'other';
 
@@ -34,6 +45,8 @@ export interface YouTubeInfo {
   captionTracks?: CaptionTrackInfo[];
   /** This "track" is one chapter (song) of a jukebox/medley video. */
   isChapter?: boolean;
+  /** Where this chapter starts in the video. */
+  chapterStartSec?: number;
   /** Songs inside a jukebox/medley video (from the description or YouTube chapters). */
   chapters?: { title: string; startSec: number }[];
 }
@@ -89,4 +102,7 @@ export type AgentMessage =
   | { type: 'snapshot'; snapshot: PageSnapshot }
   | { type: 'captions'; key: string; captions: CaptionData | null };
 
-export type PanelMessage = { type: 'seek'; seconds: number } | { type: 'captions'; key: string };
+export type PanelMessage =
+  | { type: 'seek'; seconds: number }
+  /** Captions for the current video; with load: true, have the player fetch them first. */
+  | { type: 'captions'; key: string; load?: boolean };

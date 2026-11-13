@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseAsrTrack, parseCueTrack } from './captions';
+import { parseAsrTrack, parseCueTrack, toCaptionData } from './captions';
 
 describe('caption parsing', () => {
   it('turns uploader captions into lines and drops [Music] markers', () => {
@@ -30,5 +30,21 @@ describe('caption parsing', () => {
       { start: 1000, text: 'hum' },
       { start: 1400, text: 'tere' },
     ]);
+  });
+});
+
+describe('toCaptionData', () => {
+  it('turns captured player captions into cues and words', () => {
+    const manual = {
+      events: ['Hum tere bin', 'Ab reh nahi sakte', 'Tere bina', 'Kya wajood mera'].map((t, i) => ({
+        tStartMs: i * 3000,
+        dDurationMs: 2500,
+        segs: [{ utf8: t }],
+      })),
+    };
+    const data = toCaptionData({ manual: { language: 'hi', json: manual } });
+    expect(data?.manual?.cues).toHaveLength(4);
+    expect(data?.manual?.cues[1]).toEqual({ start: 3000, end: 5500, text: 'Ab reh nahi sakte' });
+    expect(toCaptionData({})).toBeNull();
   });
 });

@@ -3,10 +3,15 @@
  * It never changes the page — no injected UI — so it can't break the site.
  */
 import { browser } from 'wxt/browser';
-import { fetchCaptions } from '@/core/agent/captions';
+import { fetchCaptions, toCaptionData } from '@/core/agent/captions';
 import {
   AGENT_PORT,
   type AgentMessage,
+  type CaptionData,
+  type CapturedCaptions,
+  PAGE_CAPTIONS,
+  PAGE_CAPTIONS_LOAD,
+  PAGE_CAPTIONS_REQUEST,
   PAGE_SEEK,
   PAGE_SNAPSHOT,
   PAGE_SNAPSHOT_REQUEST,
@@ -16,6 +21,20 @@ import {
 import { SUPPORTED_SITES } from '@/core/agent/sites';
 
 const POLL_MS = 250;
+
+/** Captions the player has downloaded for this video (captured by the page hooks). */
+function readCapturedCaptions(videoId: string): CaptionData | null {
+  let raw: CapturedCaptions | null = null;
+  const onCaptions = (event: Event) => {
+    try {
+      raw = JSON.parse(String((event as CustomEvent).detail)) as CapturedCaptions | null;
+    } catch {}
+  };
+  window.addEventListener(PAGE_CAPTIONS, onCaptions, { once: true });
+  window.dispatchEvent(new CustomEvent(PAGE_CAPTIONS_REQUEST, { detail: videoId }));
+  window.removeEventListener(PAGE_CAPTIONS, onCaptions);
+  return raw ? toCaptionData(raw) : null;
+}
 
 /** Synchronously asks the page-world hooks for a snapshot (events dispatch synchronously). */
 function readPage(): PageSnapshot | null {
@@ -110,8 +129,23 @@ export default defineContentScript({
           window.dispatchEvent(new CustomEvent(PAGE_SEEK, { detail: String(message.seconds) }));
           setTimeout(tick, 50);
         } else if (message.type === 'captions') {
-          const tracks = readPage()?.track?.youtube?.captionTracks ?? [];
-          const captions = tracks.length ? await fetchCaptions(tracks) : null;
+          const yt = readPage()?.track?.youtube;
+          if (!yt) {
+            send({ type: 'captions', key: message.key, captions: null });
+            return;
+          }
+          if (message.load) {
+            window.dispatchEvent(new CustomEvent(PAGE_CAPTIONS_LOAD, { detail: yt.videoId }));
+          }
+          // Wait for the player's own caption download when we asked for one.
+          const deadline = Date.now() + (message.load ? 8000 : 0);
+          let captions = readCapturedCaptions(yt.videoId);
+          while (!captions && Date.now() < deadline) {
+            await new Promise((r) => setTimeout(r, 300));
+            captions = readCapturedCaptions(yt.videoId);
+          }
+          if (!captions && yt.captionTracks?.length)
+            captions = await fetchCaptions(yt.captionTracks);
           send({ type: 'captions', key: message.key, captions });
         }
       });

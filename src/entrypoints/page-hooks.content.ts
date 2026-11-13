@@ -5,6 +5,10 @@
  * Every hook is wrapped so a failure here can't break the site.
  */
 import {
+  type CapturedCaptions,
+  PAGE_CAPTIONS,
+  PAGE_CAPTIONS_LOAD,
+  PAGE_CAPTIONS_REQUEST,
   PAGE_SEEK,
   PAGE_SNAPSHOT,
   PAGE_SNAPSHOT_REQUEST,
@@ -39,6 +43,11 @@ interface YtPlayer extends HTMLElement {
     };
   };
   seekTo?: (seconds: number, allowSeekAhead?: boolean) => void;
+  getOption?: (module: string, option: string) => unknown;
+  setOption?: (module: string, option: string, value: unknown) => void;
+  loadModule?: (module: string) => void;
+  toggleSubtitlesOn?: () => void;
+  toggleSubtitles?: () => void;
 }
 
 interface PositionState {
@@ -293,6 +302,119 @@ function install() {
       const el = activeMedia();
       if (el && Number.isFinite(el.duration)) el.currentTime = seconds;
       else seekHandler?.({ action: 'seekto', seekTime: seconds });
+    } catch {}
+  });
+
+  if (site !== 'other') installCaptionCapture(ytPlayer);
+}
+
+/**
+ * YouTube's player downloads caption files itself (with tokens we can't make) when
+ * CC is on. We passively keep a copy of what it downloads, per video, so lyrics can
+ * use them. Nothing about the request or response is changed.
+ */
+function installCaptionCapture(ytPlayer: () => YtPlayer | null) {
+  const captured = new Map<string, CapturedCaptions>();
+
+  const remember = (url: string, body: string) => {
+    try {
+      const u = new URL(url, location.origin);
+      const videoId = u.searchParams.get('v');
+      if (!videoId || !body) return;
+      const json = JSON.parse(body) as { events?: unknown[] };
+      if (!json.events?.length) return;
+      // `kind=asr` marks auto-generated captions (`caps=asr` is just a capability flag).
+      const asr = u.searchParams.get('kind') === 'asr';
+      const language = u.searchParams.get('lang') ?? '';
+      const entry = captured.get(videoId) ?? {};
+      entry[asr ? 'asr' : 'manual'] = { language, json };
+      captured.set(videoId, entry);
+      if (captured.size > 20) captured.delete(captured.keys().next().value as string);
+    } catch {
+      // Not json3 or not a caption file: ignore.
+    }
+  };
+
+  try {
+    const originalOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function open(
+      this: XMLHttpRequest,
+      method: string,
+      url: string | URL,
+      ...rest: unknown[]
+    ) {
+      try {
+        const href = String(url);
+        if (href.includes('/api/timedtext')) {
+          this.addEventListener('load', () => {
+            try {
+              remember(href, typeof this.response === 'string' ? this.response : this.responseText);
+            } catch {}
+          });
+        }
+      } catch {}
+      return (originalOpen as (...a: unknown[]) => void).call(this, method, url, ...rest);
+    } as typeof XMLHttpRequest.prototype.open;
+  } catch {}
+
+  try {
+    const originalFetch = window.fetch;
+    window.fetch = async function fetchWithCapture(...args: Parameters<typeof fetch>) {
+      const response = await originalFetch.apply(this, args);
+      try {
+        const input = args[0];
+        const href =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (href.includes('/api/timedtext')) {
+          response
+            .clone()
+            .text()
+            .then((body) => remember(href, body))
+            .catch(() => {});
+        }
+      } catch {}
+      return response;
+    };
+  } catch {}
+
+  window.addEventListener(PAGE_CAPTIONS_REQUEST, (event) => {
+    let detail = 'null';
+    try {
+      detail = JSON.stringify(captured.get(String((event as CustomEvent).detail)) ?? null);
+    } catch {}
+    window.dispatchEvent(new CustomEvent(PAGE_CAPTIONS, { detail }));
+  });
+
+  // Asked by the user from the panel: have the player load captions, then put CC
+  // back the way it was once they've arrived.
+  window.addEventListener(PAGE_CAPTIONS_LOAD, (event) => {
+    try {
+      const videoId = String((event as CustomEvent).detail);
+      const player = ytPlayer();
+      if (!player || captured.get(videoId)?.manual || captured.get(videoId)?.asr) return;
+      const wasOn = Boolean(
+        (player.getOption?.('captions', 'track') as { languageCode?: string } | undefined)
+          ?.languageCode,
+      );
+      if (wasOn) {
+        // CC is on but we have nothing: switching it off and on makes the player
+        // download the captions again. It ends up on, as it was.
+        player.toggleSubtitles?.();
+        setTimeout(() => player.toggleSubtitles?.(), 400);
+        return;
+      }
+      player.loadModule?.('captions');
+      player.toggleSubtitlesOn?.();
+      const started = Date.now();
+      const timer = setInterval(() => {
+        const done = captured.get(videoId);
+        if (done || Date.now() - started > 8000) {
+          clearInterval(timer);
+          try {
+            player.toggleSubtitles?.(); // back off, as it was
+          } catch {}
+        }
+      }, 250);
     } catch {}
   });
 }
