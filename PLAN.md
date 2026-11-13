@@ -286,14 +286,28 @@ A **golden test set** (videoId → expected track + reference offset) runs in CI
 - **Still next:** word-by-word fill, a live check of Spotify/JioSaavn timing, and more sources for regional songs (Gujarati, Telugu/Tamil dubs).
 
 ### Sync + Bengali pass (2026-11-13, later)
-- **Why lyrics drifted or got stuck:** label "(Song)" uploads are edits (e.g. *Judi Jodi* 2:36 vs the 3:59 song) and music videos have intros, while lyric sources are timed to the album track.
+
+- **Why lyrics drifted or got stuck:** label "(Song)" uploads are edits (e.g. _Judi Jodi_ 2:36 vs the 3:59 song) and music videos have intros, while lyric sources are timed to the album track.
 - **YouTube captions can't be used.** Caption files (`timedtext`) come back empty without YouTube's player token, and the transcript API refuses outside requests. So the caption-based auto-sync/offset code stays in, but it rarely gets data.
 - **Fixes:**
   - Among uploads of the same song, prefer the one whose length matches the video (many LRCLIB entries were synced to the YouTube cut).
   - When nothing matches within 10 s, show **follow-along** mode: lyrics scroll with playback progress, with no line highlighting that would be wrong.
 - **Sources:** JioSaavn added as a plain-lyrics fallback (often already Hinglish).
 - **Bengali:**
-  - Bengali → English letters ("Bengalish": আমি তোমাকে ভালোবাসি → *ami tomake bhalobashi*).
+  - Bengali → English letters ("Bengalish": আমি তোমাকে ভালোবাসি → _ami tomake bhalobashi_).
   - Mixed English/Bengali lines are converted too.
   - Bengali-script title noise and duplicate brackets are ignored.
 - **Ideas for exact sync on edits:** align with the audio itself (vocal-onset detection in the page), or a community offset database keyed by video id.
+
+### Latency + jukeboxes (2026-11-13, evening)
+
+- **Latency:**
+  - Each playback report now carries the time the position was read in the page (`at`), and the panel extrapolates from that, removing polling/messaging delay.
+  - Lines switch 280 ms early, and the highlight fade dropped from 0.45 s to 0.18 s.
+- **Jukeboxes/medleys:**
+  - Chapters come from the description's timestamp list (always available from the player) or YouTube's chapter data.
+  - The current chapter becomes the song (own lyrics lookup, timing measured from the chapter start).
+  - Example: the SVF _Sadhak Bamakhyapa_ jukebox splits into its 4 songs. Those devotional songs have no lyrics in LRCLIB/NetEase/JioSaavn, so the panel names the right song but shows no lyrics.
+- **Not possible yet:**
+  - Identifying a song by listening needs a paid audio-recognition API (ACRCloud/AudD/Shazam), so a key or backend.
+  - Mixes/mashups without chapters can't be split.
