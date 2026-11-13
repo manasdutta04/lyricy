@@ -28,7 +28,9 @@ export function toVideoDetails(
   const yt = track.youtube;
   if (yt && site === 'youtube') {
     return {
-      videoId: yt.videoId,
+      // The track key, not the bare video id: each song in a jukebox is its own
+      // track ("<id>#<chapter>") and must get its own cached lyrics.
+      videoId: track.key,
       title: yt.title,
       author: yt.author,
       lengthSec: yt.lengthSec,
