@@ -45,6 +45,42 @@ describe('parseVideoTitle', () => {
     expect(stripHashtagsAndEmoji('#kesariya #shorts')).toBe('kesariya');
   });
 
+  it('handles "Film: Song (Song) | credits" label uploads', () => {
+    const guesses = parseVideoTitle(
+      'Ramayana: Mangal Rang (Song) | Namit M, Nitesh T | AR Rahman, Arijit Singh, Shreya Ghoshal, Kumar V',
+      'T-Series',
+    );
+    expect(guesses[0]).toEqual({ artist: '', title: 'Mangal Rang' });
+    expect(guesses).toContainEqual({ artist: 'Arijit Singh', title: 'Mangal Rang' });
+    expect(guesses).toContainEqual({
+      artist: 'AR Rahman, Arijit Singh, Shreya Ghoshal, Kumar V',
+      title: 'Mangal Rang',
+    });
+  });
+
+  it('treats names after a colon as singers', () => {
+    const [first] = parseVideoTitle(
+      'Sahiba (Official Music Video) : Aditya Rikhari, Ankita Chhetri | T-Series',
+      'T-Series',
+    );
+    expect(first).toEqual({ artist: 'Aditya Rikhari, Ankita Chhetri', title: 'Sahiba' });
+  });
+
+  it('splits capital-I separators and drops a trailing "Song"', () => {
+    const guesses = parseVideoTitle(
+      'Diljit Dosanjh I Sanya Malhotra I Charmer | Raj Ranjodh | Avvy Sra ( Official Video )',
+      'Diljit Dosanjh',
+    );
+    expect(guesses.map((g) => g.title)).toContain('Charmer');
+    const [besharam] = parseVideoTitle('Besharam Rang Song | Pathaan | Shah Rukh Khan', 'YRF');
+    expect(besharam?.title).toBe('Besharam Rang');
+  });
+
+  it('drops (From "Film") from the searched title', () => {
+    const [first] = parseVideoTitle('Arijit Singh - Kesariya (From "Brahmastra")', 'Arijit Singh');
+    expect(first).toEqual({ artist: 'Arijit Singh', title: 'Kesariya' });
+  });
+
   it('reads Japanese 「」 titles', () => {
     const [first] = parseVideoTitle('YOASOBI「アイドル」 Official Music Video', 'Ayase / YOASOBI');
     expect(first).toEqual({ artist: 'YOASOBI', title: 'アイドル' });

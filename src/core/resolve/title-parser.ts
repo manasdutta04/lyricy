@@ -9,7 +9,7 @@ export interface TitleGuess {
 }
 
 const NOISE_WORDS =
-  /\b(official|video|audio|lyrics?|lyrical|mv|m\/v|hd|hq|4k|8k|1080p|720p|visuali[sz]er|remaster(ed)?|music video|full (song|video|audio)|explicit|clean|colou?r coded|eng(lish)? subs?|subtitles?|sub español|topic|out now|premiere|performance video|video song|audio song|new song|latest song)\b/i;
+  /\b(official|video|audio|lyrics?|lyrical|mv|m\/v|hd|hq|4k|8k|1080p|720p|visuali[sz]er|remaster(ed)?|music video|full (song|video|audio)|explicit|clean|colou?r coded|eng(lish)? subs?|subtitles?|sub español|topic|out now|premiere|performance video|video song|audio song|new song|latest song|(full\s+)?song|title track|from\s+.+|live)\b/i;
 
 /** Noise phrases removed even when not in brackets. Longest first. */
 const NOISE_PHRASES = new RegExp(
@@ -42,6 +42,9 @@ const SEGMENT_SPLIT = /\s*[|｜•·]\s*|\s+\/\/\s+/;
 const DASH_SPLIT = /\s+[-–—~]\s+/;
 const QUOTED = /^(.*?)\s*["“”'‘’]([^"“”'‘’]{2,})["“”'‘’]/;
 const CJK_QUOTED = /^(.*?)\s*[「『]([^」』]+)[」』]/;
+/** "Film: Song" / "Album: Song" (Bollywood labels write titles this way). */
+const COLON_SPLIT = /\s*[:：]\s+/;
+const MAX_NAME_GUESSES = 4;
 
 /** Channels that upload many artists' songs: their name says nothing about the artist. */
 const LABEL_CHANNEL =
@@ -65,12 +68,20 @@ export function channelArtist(channel: string): string {
 }
 
 function tidy(s: string): string {
-  return s
+  const cleaned = s
     .replace(NOISE_PHRASES, ' ')
     .replace(/\(\s*\)|\[\s*\]/g, ' ')
     .replace(/\s+/g, ' ')
     .replace(/^[\s\-–—:|,]+|[\s\-–—:|,]+$/g, '')
     .trim();
+  // "Besharam Rang Song" → "Besharam Rang" (but keep a title that is just "Song").
+  const withoutSong = cleaned.replace(/\s+(song|video)$/i, '').trim();
+  return withoutSong || cleaned;
+}
+
+/** Some uploads separate credits with a capital "I": "Diljit Dosanjh I Sanya Malhotra I Charmer". */
+function normalizeSeparators(title: string): string {
+  return (title.match(/\s+I\s+/g)?.length ?? 0) >= 2 ? title.replace(/\s+I\s+/g, ' | ') : title;
 }
 
 const HASHTAG = /#([\p{L}\p{M}\p{N}_]+)/gu;
@@ -106,7 +117,7 @@ function splitNames(s: string): string[] {
  * uploads and film-style "Song | Movie | Singer" titles.
  */
 export function parseVideoTitle(rawTitle: string, channel: string): TitleGuess[] {
-  let title = stripHashtagsAndEmoji(rawTitle.normalize('NFKC'));
+  let title = normalizeSeparators(stripHashtagsAndEmoji(rawTitle.normalize('NFKC')));
 
   // Drop bracketed noise like "(Official Music Video)" / "[4K]", keep "(Remix)" etc.
   title = title.replace(BRACKET_GROUP, (group, inner: string) =>
@@ -151,14 +162,49 @@ export function parseVideoTitle(rawTitle: string, channel: string): TitleGuess[]
   }
 
   const whole = tidy(main.replace(/[「『」』]/g, ' '));
+
+  // "Ramayana: Mangal Rang" → the song is the part after the colon.
+  let songPart = dashParts.length >= 2 ? (dashParts[0] ?? whole) : whole;
+  const colon = songPart.split(COLON_SPLIT).map(tidy).filter(Boolean);
+  if (colon.length === 2 && guesses.length === 0) {
+    const [before, after] = colon as [string, string];
+    if (/,|&|\sx\s/i.test(after)) {
+      // "Sahiba : Aditya Rikhari, Ankita Chhetri" → song first, then the singers.
+      guesses.push({ artist: after, title: before, featured });
+      guesses.push({ artist: fromChannel, title: before, featured });
+      songPart = before;
+    } else {
+      guesses.push({ artist: fromChannel, title: after, featured });
+      guesses.push({ artist: before, title: after, featured });
+      songPart = after;
+    }
+  }
+
+  // "Diljit Dosanjh | Sanya Malhotra | Charmer": the first part is the artist, so
+  // the song is one of the other parts.
+  if (fromChannel && dashParts.length < 2 && similarity(whole, fromChannel) >= 0.8) {
+    for (const segment of segments.filter((s) => s !== main).slice(0, 4)) {
+      const song = tidy(segment);
+      if (song && !NOISE_WORDS.test(song)) guesses.push({ artist: fromChannel, title: song });
+    }
+  }
+
   if (whole) guesses.push({ artist: fromChannel, title: whole, featured });
 
-  // Film/label uploads: "Song - Movie | Actor | Composer | Singer". The singer is
-  // usually one of the other segments, so offer them as artists for the song part.
-  const songPart = dashParts.length >= 2 ? (dashParts[0] ?? whole) : whole;
-  for (const segment of segments.filter((s) => s !== main).slice(0, 5)) {
-    const artist = tidy(segment);
+  // Film/label uploads: "Song - Movie | Actor | Composer | Singer". The singers are
+  // usually in the other segments, so offer them (together, then one by one) as
+  // artists for the song part.
+  const credits = segments
+    .filter((s) => s !== main)
+    .slice(0, 5)
+    .map(tidy);
+  for (const artist of credits) {
     if (artist && songPart && !NOISE_WORDS.test(artist)) guesses.push({ artist, title: songPart });
+  }
+  const names = credits.flatMap((c) => (c && !NOISE_WORDS.test(c) ? splitNames(c) : []));
+  // The last-listed credits are usually the singers ("… | Composer, Singer").
+  for (const name of names.slice(-MAX_NAME_GUESSES).reverse()) {
+    if (name.length > 2 && songPart) guesses.push({ artist: name, title: songPart });
   }
 
   const seen = new Set<string>();
