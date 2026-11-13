@@ -96,3 +96,29 @@ describe('durationScore', () => {
     ).toBeGreaterThan(0.8);
   });
 });
+
+describe('title gate', () => {
+  it('rejects the right artist with a different song', () => {
+    const score = scoreCandidate(
+      { artist: 'Diljit Dosanjh', title: 'Charmer', durationSec: 170 },
+      {
+        artist: 'Diljit Dosanjh',
+        title: 'Lalkara (feat. Sultaan)',
+        durationSec: 171,
+        synced: true,
+      },
+    );
+    expect(score).toBeLessThan(0.5);
+  });
+});
+
+describe('durationScore for edits', () => {
+  it('is neutral when the video is a shortened edit of the song', () => {
+    expect(
+      durationScore(
+        { artist: '', title: '', durationSec: 146, durationKind: 'loose' },
+        { artist: '', title: '', durationSec: 277 },
+      ),
+    ).toBe(0.5);
+  });
+});

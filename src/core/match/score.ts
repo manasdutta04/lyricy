@@ -43,7 +43,10 @@ export function titleSimilarity(queryTitle: string, candidate: MatchCandidate): 
 
 export function durationScore(query: MatchQuery, candidate: MatchCandidate): number {
   if (!query.durationSec || !candidate.durationSec) return 0.5;
-  const diff = Math.abs(query.durationSec - candidate.durationSec);
+  const signed = query.durationSec - candidate.durationSec;
+  // A video much shorter than the song is an edit/teaser/Short: length says nothing.
+  if (query.durationKind !== 'tight' && signed < -15) return 0.5;
+  const diff = Math.abs(signed);
   const [full, zero] = query.durationKind === 'tight' ? [2, 15] : [4, 45];
   if (diff <= full) return 1;
   if (diff >= zero) return 0;
@@ -68,13 +71,22 @@ export function scoreCandidate(query: MatchQuery, candidate: MatchCandidate): nu
     WEIGHTS.title * title + WEIGHTS.artist * artist,
     (WEIGHTS.title + WEIGHTS.artist) * swapped * 0.9,
   );
-  return (
+  const score =
     textScore +
     WEIGHTS.duration * durationScore(query, candidate) +
     WEIGHTS.synced * (candidate.synced ? 1 : 0) -
-    versionPenalty(`${query.title} ${query.artist}`, candidate.title)
+    versionPenalty(`${query.title} ${query.artist}`, candidate.title);
+  // The right artist with the wrong song is still the wrong song.
+  const titleMatch = Math.max(
+    title,
+    query.artist.trim() ? artistSimilarity(query.artist, candidate.title) : 0,
   );
+  return titleMatch < MIN_TITLE_MATCH ? Math.min(score, TITLE_MISMATCH_CAP) : score;
 }
+
+/** Below this title similarity a candidate can't be accepted, however good the rest is. */
+const MIN_TITLE_MATCH = 0.45;
+const TITLE_MISMATCH_CAP = 0.45;
 
 const VERSION_TAGS = [
   'remix',
