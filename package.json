@@ -17,7 +17,8 @@
     "test:watch": "vitest",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "postinstall": "wxt prepare"
+    "postinstall": "wxt prepare",
+    "icons": "node scripts/icons.mjs"
   },
   "dependencies": {
     "any-ascii": "^0.3.3",
@@ -27,6 +28,7 @@
     "@babel/core": "^7.29.13",
     "@biomejs/biome": "^2.6.7",
     "@preact/preset-vite": "^2.10.6",
+    "@resvg/resvg-js": "^2.6.2",
     "typescript": "^7.0.2",
     "vitest": "^4.1.12",
     "wxt": "^0.21.5"

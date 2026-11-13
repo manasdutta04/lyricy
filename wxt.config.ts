@@ -22,6 +22,14 @@ export default defineConfig({
       'https://api.lyrics.ovh/*',
     ],
     optional_host_permissions: ['<all_urls>'],
-    action: { default_title: 'Show lyrics' },
+    action: {
+      default_title: 'Show lyrics',
+      default_icon: {
+        16: 'icon/16.png',
+        32: 'icon/32.png',
+        48: 'icon/48.png',
+        128: 'icon/128.png',
+      },
+    },
   },
 });
