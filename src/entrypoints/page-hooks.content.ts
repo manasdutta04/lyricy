@@ -14,6 +14,7 @@ import {
   type YouTubeInfo,
 } from '@/core/agent/protocol';
 import { SUPPORTED_SITES } from '@/core/agent/sites';
+import { type Chapter, parseDescriptionChapters } from '@/core/youtube/chapters';
 
 interface YtPlayer extends HTMLElement {
   getPlayerResponse?: () => {
@@ -22,6 +23,7 @@ interface YtPlayer extends HTMLElement {
       title?: string;
       author?: string;
       lengthSeconds?: string;
+      shortDescription?: string;
       isLiveContent?: boolean;
     };
     microformat?: { playerMicroformatRenderer?: { category?: string } };
@@ -144,6 +146,41 @@ function install() {
     return [...art].sort((a, b) => size(b) - size(a))[0]?.src;
   }
 
+  /** Chapters from the description, else from YouTube's own chapter data (first page load). */
+  let chapterCache: { videoId: string; chapters: Chapter[] | undefined } | null = null;
+  function readChapters(videoId: string, description: string, lengthSec: number) {
+    // Snapshots run 4×/second; chapters only change with the video.
+    if (chapterCache?.videoId === videoId) return chapterCache.chapters;
+    const chapters = findChapters(videoId, description, lengthSec);
+    chapterCache = { videoId, chapters };
+    return chapters;
+  }
+
+  function findChapters(
+    videoId: string,
+    description: string,
+    lengthSec: number,
+  ): Chapter[] | undefined {
+    const fromDescription = parseDescriptionChapters(description, lengthSec);
+    if (fromDescription.length) return fromDescription;
+    try {
+      const data = (window as Window & { ytInitialData?: unknown }).ytInitialData as
+        | { currentVideoEndpoint?: { watchEndpoint?: { videoId?: string } } }
+        | undefined;
+      if (data?.currentVideoEndpoint?.watchEndpoint?.videoId !== videoId) return undefined;
+      const json = JSON.stringify(data);
+      const found = [
+        ...json.matchAll(
+          /"chapterRenderer":\{"title":\{"simpleText":"((?:[^"\\]|\\.)*)"\},"timeRangeStartMillis":(\d+)/g,
+        ),
+      ].map((m) => ({ title: JSON.parse(`"${m[1]}"`) as string, startSec: Number(m[2]) / 1000 }));
+      const unique = [...new Map(found.map((c) => [c.startSec, c])).values()];
+      return unique.length >= 2 ? unique.sort((a, b) => a.startSec - b.startSec) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   function youtubeInfo(): YouTubeInfo | undefined {
     try {
       const response = ytPlayer()?.getPlayerResponse?.();
@@ -171,6 +208,11 @@ function install() {
         isShorts: isShorts(),
         category: response?.microformat?.playerMicroformatRenderer?.category,
         captionTracks: tracks,
+        chapters: readChapters(
+          vd.videoId,
+          vd.shortDescription ?? '',
+          Number(vd.lengthSeconds) || 0,
+        ),
       };
     } catch {
       return undefined;
@@ -212,6 +254,7 @@ function install() {
     if (el) {
       playback = {
         positionMs: el.currentTime * 1000,
+        at: Date.now(),
         playing: !el.paused && !el.ended && el.readyState >= 2,
         rate: el.playbackRate || 1,
         ad,
@@ -223,6 +266,7 @@ function install() {
         : 0;
       playback = {
         positionMs: Math.min(position.duration, position.position + elapsed) * 1000,
+        at: Date.now(),
         playing,
         rate: position.playbackRate,
         ad: false,

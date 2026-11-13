@@ -32,6 +32,10 @@ export interface YouTubeInfo {
   /** "Music in this video" card (read from the page). */
   music?: { title: string; artist: string; album?: string };
   captionTracks?: CaptionTrackInfo[];
+  /** This "track" is one chapter (song) of a jukebox/medley video. */
+  isChapter?: boolean;
+  /** Songs inside a jukebox/medley video (from the description or YouTube chapters). */
+  chapters?: { title: string; startSec: number }[];
 }
 
 export interface TrackSnapshot {
@@ -51,6 +55,8 @@ export interface PlaybackSnapshot {
   rate: number;
   /** An ad is playing (position is the ad's, not the song's). */
   ad: boolean;
+  /** Date.now() when positionMs was read, so the panel can extrapolate precisely. */
+  at: number;
 }
 
 export interface PageSnapshot {
