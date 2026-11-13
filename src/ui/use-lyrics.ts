@@ -88,7 +88,7 @@ export function useLyrics(
         setState({ phase: 'skipped', track: current });
         return;
       }
-      const captions = yt && site !== 'other' ? await fetchCaptions(key) : null;
+      const captions = yt && site !== 'other' && !yt.isChapter ? await fetchCaptions(key) : null;
       if (cancelled) return;
       const manual = manualRef.current?.key === key ? manualRef.current : null;
       const force = forceRef.current || Boolean(manual);

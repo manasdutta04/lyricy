@@ -6,6 +6,7 @@ import { useSetting } from '@/core/state/use-setting';
 import { LyricsSurface } from '@/ui/LyricsSurface';
 import type { Playback } from '@/ui/LyricsView';
 import { useAgent } from '@/ui/use-agent';
+import { useChapterTrack } from '@/ui/use-chapter-track';
 import { useLyrics } from '@/ui/use-lyrics';
 
 const SCRIPT_OPTIONS: { value: ScriptMode; label: string; title: string }[] = [
@@ -133,19 +134,20 @@ export function App() {
   const [offsets, setOffsets] = useState<Record<string, number>>({});
   const allSites = useAllSites();
 
-  const track = agent.snapshot?.track ?? null;
   const site = agent.snapshot?.site ?? 'other';
+  // In a jukebox/medley video, the current chapter is the song.
+  const { track, startMs } = useChapterTrack(agent.snapshot?.track ?? null, agent.now);
   const { state, retry, searchAnyway, searchManual } = useLyrics(track, site, agent.captions);
   const key = track?.key ?? '';
   const userOffset = offsets[key] ?? 0;
 
   const playback = useMemo<Playback>(
     () => ({
-      // Positive offset = lyrics later, so read the clock earlier.
-      now: () => agent.now() - userOffset,
-      seek: (ms) => agent.seek(ms + userOffset),
+      // Time within the current song; a positive offset shows lyrics later.
+      now: () => agent.now() - startMs - userOffset,
+      seek: (ms) => agent.seek(ms + startMs + userOffset),
     }),
-    [agent.now, agent.seek, userOffset],
+    [agent.now, agent.seek, startMs, userOffset],
   );
 
   const nudge = useCallback(
