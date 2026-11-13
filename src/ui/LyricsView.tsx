@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { Script } from '@/core/lang/script';
 import type { LyricLine, Lyrics } from '@/core/lyrics/types';
@@ -187,62 +188,17 @@ function SyncedLyrics({ lyrics, mode, playback }: ViewProps & { playback: Playba
   );
 }
 
-function UnsyncedLyrics({ lyrics, mode, notice }: ViewProps & { notice: string }) {
-  return (
-    <div class="viewport unsynced">
-      <p class="notice">{notice}</p>
-      {lyrics.lines.map((line, i) => (
-        <p key={i} class="line static">
-          <LineText line={line} lyrics={lyrics} mode={mode} />
-        </p>
-      ))}
-    </div>
-  );
-}
-
-/** How quickly the follow view eases toward its target scroll position (per frame). */
-const FOLLOW_EASE = 0.06;
-/** After the user scrolls, stop following for this long. */
-const FOLLOW_PAUSE_MS = 4000;
-
-/**
- * For lyrics we can't time line by line (plain text, or timed for a different cut
- * of the song than this video): scroll steadily with playback progress instead of
- * highlighting lines that would be wrong.
- */
-function FollowLyrics({
+function UnsyncedLyrics({
   lyrics,
   mode,
-  playback,
-  durationMs,
   notice,
-}: ViewProps & { playback: Playback; durationMs: number; notice: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const pausedUntil = useRef(0);
-
-  useEffect(() => {
-    let frame = 0;
-    const tick = () => {
-      const el = ref.current;
-      if (el && performance.now() > pausedUntil.current) {
-        const progress = Math.min(1, Math.max(0, playback.now() / durationMs));
-        const target = progress * Math.max(0, el.scrollHeight - el.clientHeight);
-        const delta = target - el.scrollTop;
-        if (Math.abs(delta) > 0.5) el.scrollTop += delta * FOLLOW_EASE;
-      }
-      frame = requestAnimationFrame(tick);
-    };
-    tick();
-    return () => cancelAnimationFrame(frame);
-  }, [playback, durationMs]);
-
-  const pause = () => {
-    pausedUntil.current = performance.now() + FOLLOW_PAUSE_MS;
-  };
-
+  action,
+}: ViewProps & { notice: string; action?: ComponentChildren }) {
   return (
-    <div ref={ref} class="viewport unsynced follow" onWheel={pause} onPointerDown={pause}>
-      <p class="notice">{notice}</p>
+    <div class="viewport unsynced">
+      <p class="notice">
+        {notice} {action}
+      </p>
       {lyrics.lines.map((line, i) => (
         <p key={i} class="line static">
           <LineText line={line} lyrics={lyrics} mode={mode} />
@@ -255,43 +211,38 @@ function FollowLyrics({
 export function LyricsView({
   lyrics,
   playback,
-  durationMs,
   unsyncedNotice,
+  action,
 }: {
   lyrics: Lyrics;
   playback: Playback;
-  /** Length of what's playing (ms), for the follow-along view. */
-  durationMs?: number;
   /** Show as plain text with this notice even if timed (e.g. Shorts play a clip). */
   unsyncedNotice?: string;
+  /** Optional control shown with the "not synced" notice (e.g. use YouTube captions). */
+  action?: ComponentChildren;
 }) {
   const mode = useSetting(scriptModeSetting);
   if (unsyncedNotice) {
-    return <UnsyncedLyrics lyrics={lyrics} mode={mode} notice={unsyncedNotice} />;
+    return <UnsyncedLyrics lyrics={lyrics} mode={mode} notice={unsyncedNotice} action={action} />;
   }
-  const canFollow = Boolean(durationMs && durationMs > 0);
-  if (lyrics.videoMismatch && canFollow) {
+  if (lyrics.videoMismatch) {
     return (
-      <FollowLyrics
+      <UnsyncedLyrics
         lyrics={lyrics}
         mode={mode}
-        playback={playback}
-        durationMs={durationMs as number}
-        notice="This video is a different cut of the song, so lyrics scroll along with it."
+        notice="Timed for another version of this song, so shown without sync."
+        action={action}
       />
     );
   }
   if (lyrics.sync === 'none') {
-    return canFollow ? (
-      <FollowLyrics
+    return (
+      <UnsyncedLyrics
         lyrics={lyrics}
         mode={mode}
-        playback={playback}
-        durationMs={durationMs as number}
-        notice="Lyrics scroll along with the song."
+        notice="These lyrics aren't time-synced."
+        action={action}
       />
-    ) : (
-      <UnsyncedLyrics lyrics={lyrics} mode={mode} notice="These lyrics aren't time-synced" />
     );
   }
   return <SyncedLyrics lyrics={lyrics} mode={mode} playback={playback} />;

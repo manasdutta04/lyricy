@@ -137,7 +137,11 @@ export function App() {
   const site = agent.snapshot?.site ?? 'other';
   // In a jukebox/medley video, the current chapter is the song.
   const { track, startMs } = useChapterTrack(agent.snapshot?.track ?? null, agent.now);
-  const { state, retry, searchAnyway, searchManual } = useLyrics(track, site, agent.captions);
+  const { state, retry, searchAnyway, searchManual, loadYouTubeCaptions } = useLyrics(
+    track,
+    site,
+    agent.captions,
+  );
   const key = track?.key ?? '';
   const userOffset = offsets[key] ?? 0;
 
@@ -180,6 +184,7 @@ export function App() {
           onRetry={retry}
           onSearchAnyway={searchAnyway}
           onSearch={searchManual}
+          onUseCaptions={site === 'youtube' ? loadYouTubeCaptions : undefined}
         />
       ) : (
         <EmptyState

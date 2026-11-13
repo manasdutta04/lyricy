@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
+import { sliceCaptions } from '@/core/agent/captions';
 import type { CaptionData, TrackSnapshot } from '@/core/agent/protocol';
 import type { LyricsResult, TrackInfo, VideoDetails } from '@/core/lyrics/types';
 import { requestLyrics } from '@/core/messages';
@@ -54,13 +55,14 @@ export function toVideoDetails(
 export function useLyrics(
   track: TrackSnapshot | null,
   site: 'youtube' | 'ytmusic' | 'other',
-  fetchCaptions: (key: string) => Promise<CaptionData | null>,
+  fetchCaptions: (key: string, load?: boolean) => Promise<CaptionData | null>,
 ) {
   const [state, setState] = useState<LyricsState>({ phase: 'idle' });
   const [attempt, setAttempt] = useState(0);
   const forceRef = useRef(false);
   const allowRef = useRef<string | null>(null);
   const manualRef = useRef<{ key: string; title: string; artist: string } | null>(null);
+  const loadCaptionsRef = useRef<string | null>(null);
   const trackRef = useRef(track);
   trackRef.current = track;
   const key = track?.key ?? null;
@@ -88,10 +90,20 @@ export function useLyrics(
         setState({ phase: 'skipped', track: current });
         return;
       }
-      const captions = yt && site !== 'other' && !yt.isChapter ? await fetchCaptions(key) : null;
+      const load = loadCaptionsRef.current === key;
+      loadCaptionsRef.current = null;
+      let captions = yt && site !== 'other' ? await fetchCaptions(key, load) : null;
+      // In a jukebox, keep only this song's part of the captions, timed from its start.
+      if (captions && yt?.isChapter && yt.chapterStartSec !== undefined) {
+        captions = sliceCaptions(
+          captions,
+          yt.chapterStartSec * 1000,
+          (yt.chapterStartSec + yt.lengthSec) * 1000,
+        );
+      }
       if (cancelled) return;
       const manual = manualRef.current?.key === key ? manualRef.current : null;
-      const force = forceRef.current || Boolean(manual);
+      const force = forceRef.current || Boolean(manual) || load;
       forceRef.current = false;
       manualRef.current = null;
       const details = toVideoDetails(current, site, captions);
@@ -143,5 +155,13 @@ export function useLyrics(
     [key],
   );
 
-  return { state, retry, searchAnyway, searchManual };
+  /** Have YouTube's player load this video's captions, then look up again with them. */
+  const loadYouTubeCaptions = useCallback(() => {
+    if (!key) return;
+    loadCaptionsRef.current = key;
+    allowRef.current = key;
+    setAttempt((n) => n + 1);
+  }, [key]);
+
+  return { state, retry, searchAnyway, searchManual, loadYouTubeCaptions };
 }

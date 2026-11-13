@@ -148,18 +148,25 @@ export function useAgent() {
   );
 
   /** YouTube captions for the current video (best effort, 5 s timeout). */
+  /**
+   * YouTube captions for the current video. With `load`, the page first has the
+   * player download them (briefly turning CC on), which takes a few seconds.
+   */
   const captions = useCallback(
-    (key: string) =>
+    (key: string, load = false) =>
       new Promise<CaptionData | null>((resolve) => {
-        const timer = setTimeout(() => {
-          waitersRef.current.delete(key);
-          resolve(null);
-        }, 5000);
+        const timer = setTimeout(
+          () => {
+            waitersRef.current.delete(key);
+            resolve(null);
+          },
+          load ? 12_000 : 3_000,
+        );
         waitersRef.current.set(key, (c) => {
           clearTimeout(timer);
           resolve(c);
         });
-        post({ type: 'captions', key });
+        post({ type: 'captions', key, load });
       }),
     [post],
   );

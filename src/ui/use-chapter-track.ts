@@ -46,10 +46,10 @@ export function useChapterTrack(
           ...yt,
           title: chapter.title,
           lengthSec,
-          // The "Music in this video" card and captions describe the whole video.
+          // The "Music in this video" card describes the whole video.
           music: undefined,
-          captionTracks: [],
           isChapter: true,
+          chapterStartSec: chapter.startSec,
         },
       },
     };
