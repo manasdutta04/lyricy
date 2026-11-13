@@ -1,7 +1,5 @@
-import type { LyricLine } from '../lyrics/types';
-
 /** Index of the last line whose start ≤ ms, or -1 before the first line. O(log n). */
-export function findActiveIndex(lines: readonly LyricLine[], ms: number): number {
+export function findActiveIndex(lines: readonly { start: number }[], ms: number): number {
   let lo = 0;
   let hi = lines.length - 1;
   let found = -1;

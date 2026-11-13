@@ -1,7 +1,8 @@
-import type { ComponentChildren } from 'preact';
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { type ComponentChildren, Fragment } from 'preact';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Script } from '@/core/lang/script';
 import type { LyricLine, Lyrics } from '@/core/lyrics/types';
+import { buildDisplayItems, progress } from '@/core/lyrics/word-timing';
 import { type ScriptMode, scriptModeSetting } from '@/core/settings';
 import { useSetting } from '@/core/state/use-setting';
 import { findActiveIndex } from '@/core/sync/active-line';
@@ -15,8 +16,6 @@ const RIPPLE_MS = 35;
 const MAX_RIPPLE_STEPS = 8;
 /** After a manual scroll, glide back to the active line after this long. */
 const BROWSE_IDLE_MS = 2500;
-/** Show the lead-in dots if the first line starts later than this. */
-const LEAD_IN_MS = 2500;
 
 interface ViewProps {
   lyrics: Lyrics;
@@ -33,6 +32,7 @@ const LANG_BY_SCRIPT: Partial<Record<Script, string>> = {
   devanagari: 'hi',
   gurmukhi: 'pa',
   bengali: 'bn',
+  gujarati: 'gu',
   japanese: 'ja',
   han: 'zh',
   hangul: 'ko',
@@ -60,61 +60,88 @@ interface Layout {
   viewport: number;
 }
 
-function useActiveLine(lyrics: Lyrics, now: () => number): number {
-  const [active, setActive] = useState(-1);
-  useEffect(() => {
-    let current = Number.NaN;
-    let frame = 0;
-    const tick = () => {
-      const index = findActiveIndex(lyrics.lines, now() + LEAD_MS);
-      if (index !== current) {
-        current = index;
-        setActive(index);
-      }
-      frame = requestAnimationFrame(tick);
-    };
-    tick();
-    return () => cancelAnimationFrame(frame);
-  }, [lyrics, now]);
-  return active;
+/** The text shown as the main line in the current script mode. */
+function mainText(line: LyricLine, mode: ScriptMode): string {
+  const romanized = line.romanized && line.romanized !== line.text ? line.romanized : undefined;
+  return mode === 'original' || !romanized ? line.text : romanized;
 }
 
+/** Held notes (long words) get Apple's soft glow while they're sung. */
+const HELD_MS = 900;
+
 function SyncedLyrics({ lyrics, mode, playback }: ViewProps & { playback: Playback }) {
-  const active = useActiveLine(lyrics, playback.now);
+  const items = useMemo(
+    () => buildDisplayItems(lyrics.lines, (line) => mainText(line, mode)),
+    [lyrics, mode],
+  );
+  const [active, setActive] = useState(-1);
   const viewportRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const leadInRef = useRef<HTMLDivElement>(null);
-  const lineRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const itemRefs = useRef<(HTMLElement | null)[]>([]);
   const [layout, setLayout] = useState<Layout>({ tops: [], viewport: 0 });
   const [manual, setManual] = useState(0);
   const [browsing, setBrowsing] = useState(false);
   const idleTimer = useRef<number | undefined>(undefined);
+  const lang = lyrics.script ? LANG_BY_SCRIPT[lyrics.script] : undefined;
 
-  const hasLeadIn = (lyrics.lines[0]?.start ?? 0) > LEAD_IN_MS;
+  // One animation loop: which line is active, and how far each of its words is sung.
+  // It runs on the window that shows the lyrics (the side panel or the floating window).
+  useEffect(() => {
+    const win = viewportRef.current?.ownerDocument.defaultView ?? window;
+    let current = Number.NaN;
+    let frame = 0;
+    const tick = () => {
+      const t = playback.now() + LEAD_MS;
+      const index = findActiveIndex(items, t);
+      if (index !== current) {
+        current = index;
+        setActive(index);
+      }
+      const item = items[index];
+      const el = itemRefs.current[index];
+      if (item && el) {
+        if (item.kind === 'gap') {
+          el.style.setProperty('--p', String(progress(t, item.start, item.end)));
+        } else {
+          const spans = el.querySelectorAll<HTMLElement>('.w');
+          item.words.forEach((w, i) => {
+            const span = spans[i];
+            if (!span) return;
+            const p = progress(t, w.start, w.end);
+            span.style.setProperty('--p', `${(p * 100).toFixed(1)}%`);
+            span.classList.toggle('held', w.end - w.start >= HELD_MS && p > 0 && p < 1);
+          });
+        }
+      }
+      frame = win.requestAnimationFrame(tick);
+    };
+    tick();
+    return () => win.cancelAnimationFrame(frame);
+  }, [items, playback]);
 
-  // Measure line positions (offsetTop ignores transforms) whenever size or fonts change.
+  // Measure item positions (offsetTop ignores transforms) whenever size or fonts change.
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
     const list = listRef.current;
     if (!viewport || !list) return;
+    const win = viewport.ownerDocument.defaultView ?? window;
     const measure = () =>
       setLayout({
-        tops: lineRefs.current.slice(0, lyrics.lines.length).map((el) => el?.offsetTop ?? 0),
+        tops: itemRefs.current.slice(0, items.length).map((el) => el?.offsetTop ?? 0),
         viewport: viewport.clientHeight,
       });
     measure();
-    const observer = new ResizeObserver(measure);
+    const observer = new win.ResizeObserver(measure);
     observer.observe(viewport);
     observer.observe(list);
     return () => observer.disconnect();
-  }, [lyrics]);
+  }, [items]);
 
   useEffect(() => () => clearTimeout(idleTimer.current), []);
 
-  const leadInTop = leadInRef.current?.offsetTop ?? 0;
-  const anchorTop = active >= 0 ? (layout.tops[active] ?? 0) : leadInTop;
+  const anchorTop = layout.tops[Math.max(0, active)] ?? 0;
   const lastTop = layout.tops[layout.tops.length - 1] ?? 0;
-  const firstTop = hasLeadIn ? leadInTop : (layout.tops[0] ?? 0);
+  const firstTop = layout.tops[0] ?? 0;
   const translate = layout.viewport * ANCHOR - anchorTop + manual;
 
   const stopBrowsing = () => {
@@ -124,10 +151,10 @@ function SyncedLyrics({ lyrics, mode, playback }: ViewProps & { playback: Playba
   };
 
   const onWheel = (event: WheelEvent) => {
-    const maxUp = anchorTop - firstTop; // can reveal lines above
-    const maxDown = lastTop - anchorTop; // can reveal lines below
+    const maxUp = anchorTop - firstTop;
+    const maxDown = lastTop - anchorTop;
     const next = Math.min(maxUp, Math.max(-maxDown, manual - event.deltaY));
-    if (next === manual) return; // at an edge: let the page scroll instead
+    if (next === manual) return;
     event.preventDefault();
     setManual(next);
     setBrowsing(true);
@@ -135,7 +162,7 @@ function SyncedLyrics({ lyrics, mode, playback }: ViewProps & { playback: Playba
     idleTimer.current = window.setTimeout(stopBrowsing, BROWSE_IDLE_MS);
   };
 
-  const transformFor = (index: number) => {
+  const styleFor = (index: number) => {
     const steps = Math.min(Math.max(index - active, 0), MAX_RIPPLE_STEPS);
     return {
       transform: `translate3d(0, ${translate}px, 0)`,
@@ -150,36 +177,55 @@ function SyncedLyrics({ lyrics, mode, playback }: ViewProps & { playback: Playba
       onWheel={onWheel}
     >
       <div ref={listRef} class="lines">
-        {hasLeadIn && (
-          <div
-            ref={leadInRef}
-            class={`line lead-in${active === -1 ? ' active' : ' past'}`}
-            style={transformFor(-1)}
-            aria-hidden="true"
-          >
-            <span class="dot" />
-            <span class="dot" />
-            <span class="dot" />
-          </div>
-        )}
-        {lyrics.lines.map((line, i) => {
+        {items.map((item, i) => {
           const distance = Math.min(Math.abs(i - active), 4);
           const state = i === active ? 'active' : i < active ? 'past' : 'future';
+          const ref = (el: HTMLElement | null) => {
+            itemRefs.current[i] = el;
+          };
+          if (item.kind === 'gap') {
+            return (
+              <div
+                key={`gap-${item.start}`}
+                ref={ref}
+                class={`line gap ${state} d${distance}`}
+                style={styleFor(i)}
+                aria-hidden="true"
+              >
+                <span class="dot" />
+                <span class="dot" />
+                <span class="dot" />
+              </div>
+            );
+          }
+          const line = lyrics.lines[item.index] as LyricLine;
+          const romanized = line.romanized && line.romanized !== line.text;
+          const showsRomanized = mode !== 'original' && romanized;
           return (
             <button
               type="button"
-              key={`${line.start}-${i}`}
-              ref={(el) => {
-                lineRefs.current[i] = el;
-              }}
+              key={`${line.start}-${item.index}`}
+              ref={ref}
               class={`line ${state} d${distance}`}
-              style={transformFor(i)}
+              style={styleFor(i)}
               onClick={() => {
                 stopBrowsing();
                 playback.seek(line.start);
               }}
             >
-              <LineText line={line} lyrics={lyrics} mode={mode} />
+              <span class="main" lang={showsRomanized && lang ? `${lang}-Latn` : lang}>
+                {item.words.map((w, wi) => (
+                  <Fragment key={wi}>
+                    <span class="w">{w.text.trimEnd()}</span>
+                    {/s$/.test(w.text) ? ' ' : ''}
+                  </Fragment>
+                ))}
+              </span>
+              {mode === 'both' && romanized && (
+                <span class="sub" lang={lang}>
+                  {line.text}
+                </span>
+              )}
             </button>
           );
         })}

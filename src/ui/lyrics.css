@@ -392,3 +392,99 @@
   letter-spacing: 0;
   opacity: 0.72;
 }
+
+/* ---------- Apple-style word-by-word fill ---------- */
+
+.line .main {
+  display: block;
+}
+
+.line .w {
+  display: inline-block;
+  transition:
+    transform 0.4s var(--ease-spring),
+    text-shadow 0.4s ease;
+}
+
+/* The active line fills word by word: sung part bright, the rest dim, soft edge. */
+.line.active .w {
+  color: transparent;
+  background-image: linear-gradient(
+    90deg,
+    #fff calc(var(--p, 0%) - 12%),
+    rgba(255, 255, 255, 0.38) calc(var(--p, 0%) + 12%)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+/* Held notes lift and glow while they're sung. */
+.line.active .w.held {
+  transform: translateY(-2px) scale(1.035);
+  text-shadow: 0 0 16px rgba(255, 255, 255, 0.55);
+}
+
+/* ---------- Intro / instrumental-break dots ---------- */
+
+.line.gap {
+  display: flex;
+  gap: 9px;
+  padding: 16px 10px;
+  cursor: default;
+}
+
+.line.gap:hover {
+  background: transparent;
+}
+
+.line.gap .dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0.35;
+  transform: scale(0.85);
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+}
+
+/* Each dot fills in turn as the break goes on, while the group breathes. */
+.line.gap.active {
+  animation: gap-breathe 2.6s ease-in-out infinite;
+}
+
+.line.gap.active .dot:nth-child(1) {
+  opacity: calc(0.35 + 0.65 * clamp(0, var(--p, 0) * 3, 1));
+  transform: scale(calc(0.85 + 0.25 * clamp(0, var(--p, 0) * 3, 1)));
+}
+
+.line.gap.active .dot:nth-child(2) {
+  opacity: calc(0.35 + 0.65 * clamp(0, var(--p, 0) * 3 - 1, 1));
+  transform: scale(calc(0.85 + 0.25 * clamp(0, var(--p, 0) * 3 - 1, 1)));
+}
+
+.line.gap.active .dot:nth-child(3) {
+  opacity: calc(0.35 + 0.65 * clamp(0, var(--p, 0) * 3 - 2, 1));
+  transform: scale(calc(0.85 + 0.25 * clamp(0, var(--p, 0) * 3 - 2, 1)));
+}
+
+@keyframes gap-breathe {
+  0%,
+  100% {
+    scale: 1;
+  }
+  50% {
+    scale: 1.12;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .line.gap.active {
+    animation: none;
+  }
+
+  .line.active .w.held {
+    transform: none;
+  }
+}
