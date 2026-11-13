@@ -275,3 +275,11 @@ A **golden test set** (videoId → expected track + reference offset) runs in CI
 - Quieter empty / not-found states (one line + retry icon), plus a manual "search with another title" field for misses.
 
 **D. Then:** word-by-word fill (Phase 2 animator) and a check that Spotify/JioSaavn timing works.
+
+### Progress (2026-11-13)
+- **A. Matching, done.** Handles "Film: Song" and "Song : Singers" titles, drops "(Song)", "(From …)" and a trailing "Song", splits capital-"I" separators, tries each credited singer, and reads only real "Music in this video" cards (album line required, people cards ignored). Length isn't held against shortened edits. A near-miss iTunes result is used as a search hint. A title gate stops "right artist, wrong song" matches.
+- **Benchmark:** 48 real label uploads (`src/core/__fixtures__/real-uploads.json`, `pipeline.bench.live.test.ts`): 45/48 found (94%), all 45 correct after fixing one wrong match (Diljit "Charmer"). The misses are a Gujarati title track, a dubbed South song and a Netflix show song, which aren't in any source.
+- **B. Settings pop-up, done.** The gear opens a small popover (script mode + all-sites switch). It closes on Esc or an outside click.
+- **C. Minimal panel, done.** 36px artwork, small one-line title, faint artwork tint, smaller lyric font, a tiny footer with the timing nudge on hover, quiet empty states.
+- **Manual search, done.** Song/artist fields for misses, plus a ⌕ button for wrong matches. Results are cached for that video.
+- **Still next:** word-by-word fill, a live check of Spotify/JioSaavn timing, and more sources for regional songs (Gujarati, Telugu/Tamil dubs).
