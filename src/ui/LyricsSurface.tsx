@@ -121,6 +121,7 @@ export function LyricsSurface({
   if (found) {
     if (isShorts || found.lyrics.sync === 'none' || found.lyrics.videoMismatch)
       timing = 'not synced';
+    else if (found.lyrics.autoCaptions) timing = 'auto-generated, may be inexact';
     else if (found.lyrics.autoSynced) timing = 'synced with YouTube captions';
     else if (found.lyrics.offsetMs) timing = 'matched to video';
   }

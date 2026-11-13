@@ -95,7 +95,7 @@ export interface CaptionData {
   /** Uploader-provided captions (often the lyrics on official music videos). */
   manual?: { language: string; cues: CaptionCue[] };
   /** Auto-generated speech recognition, word-timed. */
-  asr?: { language: string; words: CaptionWord[] };
+  asr?: { language: string; words: CaptionWord[]; cues?: CaptionCue[] };
 }
 
 export type AgentMessage =

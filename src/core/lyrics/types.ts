@@ -46,6 +46,8 @@ export interface Lyrics {
   romanization?: 'provider' | 'generated' | 'none';
   /** Timed by aligning plain lyrics to YouTube's auto-captions. */
   autoSynced?: boolean;
+  /** Taken from YouTube's auto-generated captions (speech recognition, may be inexact). */
+  autoCaptions?: boolean;
   /** Shift applied so studio-timed lyrics match this video (e.g. a music-video intro). */
   offsetMs?: number;
   /**

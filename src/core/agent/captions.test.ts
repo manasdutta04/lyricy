@@ -48,3 +48,34 @@ describe('toCaptionData', () => {
     expect(toCaptionData({})).toBeNull();
   });
 });
+
+describe('auto-generated captions', () => {
+  const asr = {
+    events: [
+      { tStartMs: 0, dDurationMs: 3000, segs: [{ utf8: '[संगीत]' }] },
+      {
+        tStartMs: 3000,
+        dDurationMs: 3000,
+        segs: [{ utf8: '[गाना गाने की आवाज़]' }, { utf8: ' उमरिया', tOffsetMs: 900 }],
+      },
+      ...['राम राम जय', 'सीता राम', 'मंगल भवन', 'अमंगल हारी', 'जय जय राम'].map((t, i) => ({
+        tStartMs: 6000 + i * 3000,
+        dDurationMs: 3000,
+        segs: t.split(' ').map((w, j) => ({ utf8: j ? ` ${w}` : w, tOffsetMs: j * 400 })),
+      })),
+    ],
+  };
+
+  it('drops [sound] markers in any language and keeps lines for lyrics', () => {
+    const data = toCaptionData({ asr: { language: 'hi', json: asr } });
+    expect(data?.asr?.cues?.map((c) => c.text)).toEqual([
+      'उमरिया',
+      'राम राम जय',
+      'सीता राम',
+      'मंगल भवन',
+      'अमंगल हारी',
+      'जय जय राम',
+    ]);
+    expect(data?.asr?.words.some((w) => w.text.includes('संगीत'))).toBe(false);
+  });
+});

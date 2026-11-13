@@ -348,3 +348,23 @@ describe('re-timing with YouTube captions', () => {
     expect(result.lyrics.lines[1]?.start).toBe(8_000);
   });
 });
+
+describe('auto-generated captions as lyrics', () => {
+  it('uses them when no source has the song, in English letters', async () => {
+    const cues = ['राम राम जय', 'सीता राम', 'मंगल भवन', 'अमंगल हारी'].map((text, i) => ({
+      start: i * 3000,
+      end: i * 3000 + 2500,
+      text,
+    }));
+    const words = cues.flatMap((c) => c.text.split(' ').map((w) => ({ start: c.start, text: w })));
+    const { fn } = fakeFetch({ itunes: [] });
+    const result = await findLyrics(
+      { ...VIDEO, site: 'youtube', captions: { asr: { language: 'hi', words, cues } } },
+      { fetch: fn },
+    );
+    if (result.status !== 'found') throw new Error(result.status);
+    expect(result.lyrics.source).toBe('youtube-captions');
+    expect(result.lyrics.autoCaptions).toBe(true);
+    expect(result.lyrics.lines[1]?.romanized).toBe('Sita ram');
+  });
+});

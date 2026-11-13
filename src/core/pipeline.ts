@@ -207,10 +207,19 @@ function alignmentWords(video: VideoDetails): CaptionWord[] {
 
 /** Uploader captions on the video itself, used when no lyrics source has the song. */
 function captionsLyrics(video: VideoDetails): Lyrics | undefined {
-  const cues = video.captions?.manual?.cues;
-  if (!cues || cues.length < 4) return undefined;
+  const manual = video.captions?.manual?.cues;
+  const auto = video.captions?.asr?.cues;
+  // Prefer the uploader's captions; fall back to YouTube's auto-generated ones.
+  const cues = manual && manual.length >= 4 ? manual : auto && auto.length >= 4 ? auto : null;
+  if (!cues) return undefined;
   const lines: LyricLine[] = cues.map((c) => ({ start: c.start, end: c.end, text: c.text }));
-  return { sync: 'line', lines, source: 'youtube-captions', sourceId: video.videoId };
+  return {
+    sync: 'line',
+    lines,
+    source: 'youtube-captions',
+    sourceId: video.videoId,
+    autoCaptions: cues !== manual,
+  };
 }
 
 /** Resolves what's playing to its best-matching lyrics. Never throws. */
