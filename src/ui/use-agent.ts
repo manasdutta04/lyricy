@@ -46,91 +46,124 @@ export function useAgent() {
   const [status, setStatus] = useState<AgentStatus>('connecting');
   const [snapshot, setSnapshot] = useState<PageSnapshot | null>(null);
   const tabIdRef = useRef<number | null>(null);
+  const snapshotRef = useRef<PageSnapshot | null>(null);
   const portRef = useRef<ReturnType<typeof browser.tabs.connect> | null>(null);
   const anchorRef = useRef<Anchor | null>(null);
   const waitersRef = useRef(new Map<string, (c: CaptionData | null) => void>());
   const clockRef = useRef(new TimestampClock(() => anchorRef.current));
 
-  const connect = useCallback(async (force = false) => {
-    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) {
-      setStatus('unsupported');
-      return;
+  /**
+   * The tab to show lyrics for: keep the one we're on while it's playing; else
+   * the active tab if it's playing (or has nothing else to compete with); else
+   * whichever tab is playing audio. So lyrics keep going when you switch tabs.
+   */
+  const pickTab = useCallback(async () => {
+    const [active] = await browser.tabs.query({ active: true, currentWindow: true });
+    if (active?.audible) return active;
+    const current = tabIdRef.current;
+    if (current !== null && snapshotRef.current?.playback?.playing && portRef.current) {
+      const tab = await browser.tabs.get(current).catch(() => undefined);
+      if (tab) return tab;
     }
-    // Same tab and still connected: nothing to do (avoids re-fetching on focus changes).
-    if (!force && tab.id === tabIdRef.current && portRef.current) return;
+    const audible = await browser.tabs.query({ audible: true }).catch(() => []);
+    const playing = audible.find((t) => t.windowId === active?.windowId) ?? audible[0];
+    return playing ?? active;
+  }, []);
 
-    const sameTab = tab.id === tabIdRef.current;
-    portRef.current?.disconnect();
-    portRef.current = null;
-    if (!sameTab) {
-      anchorRef.current = null;
-      setSnapshot(null);
-      setStatus('connecting');
-    }
-    tabIdRef.current = tab.id;
-    const id = tab.id;
-
-    let gotMessage = false;
-    let port: ReturnType<typeof browser.tabs.connect>;
-    try {
-      port = browser.tabs.connect(id, { name: AGENT_PORT });
-    } catch {
-      setStatus(isSupportedUrl(tab.url) ? 'needs-reload' : 'unsupported');
-      return;
-    }
-    portRef.current = port;
-
-    port.onMessage.addListener((raw: unknown) => {
-      const message = raw as AgentMessage;
-      gotMessage = true;
-      if (message.type === 'snapshot') {
-        setStatus('connected');
-        setSnapshot(message.snapshot);
-        anchorRef.current = message.snapshot.playback;
-      } else if (message.type === 'captions') {
-        waitersRef.current.get(message.key)?.(message.captions);
-        waitersRef.current.delete(message.key);
-      }
-    });
-
-    port.onDisconnect.addListener(async () => {
-      // Reading lastError tells Chrome we handled "Receiving end does not exist"
-      // (no agent in this tab yet); otherwise it logs it as an unchecked error.
-      void browser.runtime.lastError;
-      if (portRef.current !== port) return;
-      portRef.current = null;
-      if (gotMessage) {
-        // Page navigated or reloaded: try again shortly.
-        setTimeout(() => void connect(true), 800);
+  const connect = useCallback(
+    async (force = false) => {
+      const tab = await pickTab();
+      if (!tab?.id) {
+        setStatus('unsupported');
         return;
       }
-      const allSites = await browser.permissions
-        .contains({ origins: ['<all_urls>'] })
-        .catch(() => false);
-      const canRun = isSupportedUrl(tab.url) || (allSites && /^https?:/.test(tab.url ?? 'https:'));
-      setStatus(canRun ? 'needs-reload' : 'unsupported');
-    });
-  }, []);
+      // Same tab and still connected: nothing to do (avoids re-fetching on focus changes).
+      if (!force && tab.id === tabIdRef.current && portRef.current) return;
+
+      const sameTab = tab.id === tabIdRef.current;
+      portRef.current?.disconnect();
+      portRef.current = null;
+      if (!sameTab) {
+        anchorRef.current = null;
+        snapshotRef.current = null;
+        setSnapshot(null);
+        setStatus('connecting');
+      }
+      tabIdRef.current = tab.id;
+      const id = tab.id;
+
+      let gotMessage = false;
+      let port: ReturnType<typeof browser.tabs.connect>;
+      try {
+        port = browser.tabs.connect(id, { name: AGENT_PORT });
+      } catch {
+        setStatus(isSupportedUrl(tab.url) ? 'needs-reload' : 'unsupported');
+        return;
+      }
+      portRef.current = port;
+
+      port.onMessage.addListener((raw: unknown) => {
+        const message = raw as AgentMessage;
+        gotMessage = true;
+        if (message.type === 'snapshot') {
+          setStatus('connected');
+          snapshotRef.current = message.snapshot;
+          setSnapshot(message.snapshot);
+          anchorRef.current = message.snapshot.playback;
+        } else if (message.type === 'captions') {
+          waitersRef.current.get(message.key)?.(message.captions);
+          waitersRef.current.delete(message.key);
+        }
+      });
+
+      port.onDisconnect.addListener(async () => {
+        // Reading lastError tells Chrome we handled "Receiving end does not exist"
+        // (no agent in this tab yet); otherwise it logs it as an unchecked error.
+        void browser.runtime.lastError;
+        if (portRef.current !== port) return;
+        portRef.current = null;
+        if (gotMessage) {
+          // Page navigated or reloaded: try again shortly.
+          setTimeout(() => void connect(true), 800);
+          return;
+        }
+        const allSites = await browser.permissions
+          .contains({ origins: ['<all_urls>'] })
+          .catch(() => false);
+        const canRun =
+          isSupportedUrl(tab.url) || (allSites && /^https?:/.test(tab.url ?? 'https:'));
+        setStatus(canRun ? 'needs-reload' : 'unsupported');
+      });
+    },
+    [pickTab],
+  );
 
   useEffect(() => {
     void connect();
     const onActivated = () => void connect();
     // Full reloads are handled by the port disconnecting; this covers a tab whose
     // agent wasn't reachable yet (e.g. it finished loading after the panel opened).
-    const onUpdated = (id: number, info: { status?: string }) => {
+    const onUpdated = (id: number, info: { status?: string; audible?: boolean }) => {
       if (id === tabIdRef.current && info.status === 'complete' && !portRef.current) {
         void connect(true);
+      } else if (info.audible !== undefined) {
+        // A tab started or stopped playing: maybe follow it.
+        void connect();
       }
     };
     const onFocus = () => void connect();
     browser.tabs.onActivated.addListener(onActivated);
     browser.tabs.onUpdated.addListener(onUpdated);
     browser.windows.onFocusChanged.addListener(onFocus);
+    // Also re-check now and then, in case the tab we follow stopped and another plays.
+    const timer = setInterval(() => {
+      if (!snapshotRef.current?.playback?.playing) void connect();
+    }, 3000);
     return () => {
       browser.tabs.onActivated.removeListener(onActivated);
       browser.tabs.onUpdated.removeListener(onUpdated);
       browser.windows.onFocusChanged.removeListener(onFocus);
+      clearInterval(timer);
     };
   }, [connect]);
 
