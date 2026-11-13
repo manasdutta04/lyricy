@@ -20,7 +20,7 @@ export function captionsAllowed(yt: TrackSnapshot['youtube']): boolean {
 export type LyricsState =
   | { phase: 'idle' }
   | { phase: 'loading'; track: TrackSnapshot }
-  | { phase: 'done'; track: TrackSnapshot; result: LyricsResult };
+  | { phase: 'done'; track: TrackSnapshot; result: LyricsResult; deep?: boolean };
 
 export function trackOf(state: LyricsState): TrackInfo | undefined {
   if (state.phase !== 'done') return undefined;
@@ -48,6 +48,8 @@ export function toVideoDetails(
       site,
       music: yt.music,
       captions,
+      // The description's lyrics are for the whole video, not one jukebox song.
+      descriptionLyrics: yt.isChapter ? undefined : yt.descriptionLyrics,
     };
   }
   // YouTube Music and MediaSession sites report clean song metadata.
@@ -76,7 +78,7 @@ export function isBetter(next: LyricsResult, prev: LyricsResult): boolean {
   return rank(next) > rank(prev);
 }
 
-/** One lyrics lookup per track, re-run on retry. */
+/** One lyrics lookup per track, re-run on retry or "Find it anyway". */
 export function useLyrics(
   track: TrackSnapshot | null,
   site: 'youtube' | 'ytmusic' | 'other',
@@ -85,6 +87,8 @@ export function useLyrics(
   const [state, setState] = useState<LyricsState>({ phase: 'idle' });
   const [attempt, setAttempt] = useState(0);
   const forceRef = useRef(false);
+  /** Set by "Find it anyway" for the next lookup of this track. */
+  const deepRef = useRef<string | null>(null);
   const manualRef = useRef<{ key: string; title: string; artist: string } | null>(null);
   /** Videos we already asked YouTube to load captions for (don't flash CC twice). */
   const triedCaptionsRef = useRef(new Set<string>());
@@ -103,7 +107,10 @@ export function useLyrics(
 
     (async () => {
       const yt = current.youtube;
-      const useCaptions = site !== 'other' && captionsAllowed(yt);
+      const deep = deepRef.current === key;
+      deepRef.current = null;
+      // Asked for explicitly: any video's captions may stand in for lyrics.
+      const useCaptions = site !== 'other' && (deep || captionsAllowed(yt));
       const getCaptions = async (load: boolean) => {
         const captions = useCaptions ? await fetchCaptions(key, load) : null;
         // In a jukebox, keep only this song's part of the captions, timed from its start.
@@ -118,7 +125,7 @@ export function useLyrics(
       };
 
       const manual = manualRef.current?.key === key ? manualRef.current : null;
-      const force = forceRef.current || Boolean(manual);
+      const force = forceRef.current || Boolean(manual) || deep;
       forceRef.current = false;
       manualRef.current = null;
       const lookup = (captions: CaptionData | null, forceLookup: boolean) => {
@@ -135,11 +142,12 @@ export function useLyrics(
               music: { title: manual.title, artist: manual.artist },
             }
           : details;
-        return requestLyrics(request, forceLookup);
+        return requestLyrics(deep ? { ...request, deep: true } : request, forceLookup);
       };
 
       // 1. Lyrics sources first (plus any captions the player already has).
-      const captions = await getCaptions(false);
+      //    "Find it anyway" has YouTube load its captions straight away.
+      const captions = await getCaptions(deep);
       if (cancelled) return;
       const result = await lookup(captions, force);
       if (cancelled) return;
@@ -153,11 +161,11 @@ export function useLyrics(
         Boolean(videoId) &&
         tracksAvailable &&
         !captions &&
-        !triedCaptionsRef.current.has(videoId as string) &&
+        (deep || !triedCaptionsRef.current.has(videoId as string)) &&
         needsCaptions(result);
       // Show unsynced lyrics meanwhile, but keep "searching" rather than flash "not found".
       if (!tryCaptions || result.status === 'found') {
-        setState({ phase: 'done', track: current, result });
+        setState({ phase: 'done', track: current, result, deep });
       }
       if (!tryCaptions) return;
       triedCaptionsRef.current.add(videoId as string);
@@ -169,6 +177,7 @@ export function useLyrics(
         phase: 'done',
         track: current,
         result: isBetter(improved, result) ? improved : result,
+        deep,
       });
     })().catch((error: unknown) => {
       if (!cancelled) {
@@ -189,6 +198,12 @@ export function useLyrics(
     forceRef.current = true;
     setAttempt((n) => n + 1);
   }, []);
+  /** "Find it anyway": search wider, use the video's captions, accept looser matches. */
+  const findAnyway = useCallback(() => {
+    if (!key) return;
+    deepRef.current = key;
+    setAttempt((n) => n + 1);
+  }, [key]);
   /** Search with a song title (and optional artist) the user typed. */
   const searchManual = useCallback(
     (title: string, artist: string) => {
@@ -199,5 +214,5 @@ export function useLyrics(
     [key],
   );
 
-  return { state, retry, searchManual };
+  return { state, retry, findAnyway, searchManual };
 }

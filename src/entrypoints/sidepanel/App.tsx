@@ -139,7 +139,7 @@ export function App() {
   const site = agent.snapshot?.site ?? 'other';
   // In a jukebox/medley video, the current chapter is the song.
   const { track, startMs } = useChapterTrack(agent.snapshot?.track ?? null, agent.now);
-  const { state, retry } = useLyrics(track, site, agent.captions);
+  const { state, retry, findAnyway } = useLyrics(track, site, agent.captions);
 
   const playback = useMemo<Playback>(
     () => ({
@@ -159,6 +159,7 @@ export function App() {
         playback={playback}
         isShorts={track.youtube?.isShorts}
         onRetry={retry}
+        onFindAnyway={findAnyway}
       />
     ) : (
       <EmptyState

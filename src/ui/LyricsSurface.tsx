@@ -8,6 +8,7 @@ interface Props {
   playback: Playback;
   isShorts?: boolean;
   onRetry: () => void;
+  onFindAnyway: () => void;
 }
 
 function Dots() {
@@ -21,7 +22,7 @@ function Dots() {
 }
 
 /** Minimal lyrics card: small header, lyrics, and a one-line source footer. */
-export function LyricsSurface({ state, playback, isShorts, onRetry }: Props) {
+export function LyricsSurface({ state, playback, isShorts, onRetry, onFindAnyway }: Props) {
   const [artFailed, setArtFailed] = useState(false);
   const track = trackOf(state);
   const playing = state.phase === 'idle' ? null : state.track;
@@ -100,7 +101,16 @@ export function LyricsSurface({ state, playback, isShorts, onRetry }: Props) {
         )}
         {state.phase === 'done' && state.result.status === 'not-found' && (
           <div class="status">
-            <p>No lyrics available for this song yet.</p>
+            {state.deep ? (
+              <p>Still no lyrics for this song anywhere we can look.</p>
+            ) : (
+              <>
+                <p>No lyrics found for this song.</p>
+                <button type="button" class="pill" onClick={onFindAnyway}>
+                  Find it anyway
+                </button>
+              </>
+            )}
           </div>
         )}
         {state.phase === 'done' && state.result.status === 'error' && (
