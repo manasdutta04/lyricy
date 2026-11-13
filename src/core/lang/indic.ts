@@ -1,3 +1,5 @@
+import { convertScript } from './brahmic';
+
 /**
  * Devanagari (Hindi) and Gurmukhi (Punjabi) → Hinglish-style Latin, the way lyrics
  * are usually written online: "मुझको इतना बताए कोई" → "mujhko itna bataaye koi".
@@ -549,7 +551,9 @@ function tableFor(word: string): Table | null {
 }
 
 /** Transliterates one Devanagari/Gurmukhi word. */
-export function transliterateIndicWord(word: string): string {
+export function transliterateIndicWord(input: string): string {
+  // Gujarati is read like Hindi: move it into Devanagari letters first.
+  const word = /[઀-૿]/.test(input) ? convertScript(input, 'gujarati', 'devanagari') : input;
   const t = tableFor(word);
   if (!t) return word;
   const override = t.words[word.normalize('NFC')];
@@ -559,7 +563,7 @@ export function transliterateIndicWord(word: string): string {
   return render(units, t);
 }
 
-const INDIC_RUN = /[ऀ-ॿঀ-৿਀-੿]+/g;
+const INDIC_RUN = /[ऀ-ॿঀ-৿਀-੿઀-૿]+/g;
 
 /** Transliterates every Devanagari/Gurmukhi run in `text`, leaving the rest alone. */
 export function transliterateIndic(text: string): string {

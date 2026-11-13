@@ -368,3 +368,28 @@ describe('auto-generated captions as lyrics', () => {
     expect(result.lyrics.lines[1]?.romanized).toBe('Sita ram');
   });
 });
+
+describe("captions in the song's own script", () => {
+  it('shows a Bengali song in Bengali letters even when captions came in Hindi letters', async () => {
+    const cues = ['मंत्र तंत्र', 'कुछ नहीं', 'जानी ना', 'माँ'].map((text, i) => ({
+      start: i * 3000,
+      end: i * 3000 + 2500,
+      text,
+    }));
+    const { fn } = fakeFetch({ itunes: [] });
+    const result = await findLyrics(
+      {
+        ...VIDEO,
+        title: 'Ami Mantra Tantra Kichhui Janine Ma (আমি মন্ত্র তন্ত্র) | Sadhak Bamakhyapa | SVF',
+        author: 'SVF',
+        site: 'youtube',
+        captions: { asr: { language: 'hi', words: [], cues } },
+      },
+      { fetch: fn },
+    );
+    if (result.status !== 'found') throw new Error(result.status);
+    expect(result.lyrics.script).toBe('bengali');
+    expect(result.lyrics.lines[0]?.text).toBe('মংত্র তংত্র');
+    expect(result.lyrics.lines[1]?.romanized).toBe('Kuchh nahi');
+  });
+});

@@ -1,4 +1,5 @@
 import type { CaptionWord } from './agent/protocol';
+import { convertScript, songScript } from './lang/brahmic';
 import { canRomanize, lyricsScript, romanizeLine } from './lang/romanize';
 import { hasNonLatin } from './lang/script';
 import { autoSync, estimateOffset, shiftLines } from './lyrics/align';
@@ -203,6 +204,26 @@ function alignmentWords(video: VideoDetails): CaptionWord[] {
     const step = parts.length ? Math.max(0, cue.end - cue.start) / parts.length : 0;
     return parts.map((text, i) => ({ start: Math.round(cue.start + i * step), text }));
   });
+}
+
+/**
+ * YouTube's auto-captions sometimes transcribe a Bengali (or Gujarati, Punjabi)
+ * song in Hindi letters. Show the original line in the song's own script instead,
+ * keeping the English-letter line as it was read.
+ */
+function inSongScript(lyrics: Lyrics, video: VideoDetails): Lyrics {
+  if (lyrics.source !== 'youtube-captions' || lyrics.script !== 'devanagari') return lyrics;
+  const target = songScript(video.title, video.author);
+  if (!target || target === 'devanagari') return lyrics;
+  return {
+    ...lyrics,
+    script: target,
+    lines: lyrics.lines.map((l) => ({
+      ...l,
+      romanized: l.romanized ?? romanizeLine(l.text),
+      text: convertScript(l.text, 'devanagari', target),
+    })),
+  };
 }
 
 /** Uploader captions on the video itself, used when no lyrics source has the song. */
@@ -417,6 +438,7 @@ export async function findLyrics(
       ? all.filter((s) => s !== chosen && s.score >= best.score - SAME_SONG_MARGIN)
       : [];
   lyrics = romanize(lyrics, chosen?.candidate, sameSong, durationMs);
+  lyrics = inSongScript(lyrics, video);
 
   // 6. Timing against this video. Lyrics sources are timed to the album track;
   //    YouTube captions (speech recognition, or the uploader's own) tell us when

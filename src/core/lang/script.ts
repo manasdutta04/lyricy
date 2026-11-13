@@ -3,6 +3,7 @@ export type Script =
   | 'devanagari'
   | 'gurmukhi'
   | 'bengali'
+  | 'gujarati'
   | 'hangul'
   | 'japanese'
   | 'han'
