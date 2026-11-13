@@ -6,9 +6,10 @@ import {
   type CaptionData,
   type PageSnapshot,
   type PanelMessage,
+  type PlaybackSnapshot,
 } from '@/core/agent/protocol';
 import { SUPPORTED_SITES } from '@/core/agent/sites';
-import { SyncClock } from '@/core/sync/clock';
+import { TimestampClock } from '@/core/sync/timestamp-clock';
 
 export type AgentStatus =
   /** Looking for the active tab / connecting. */
@@ -20,12 +21,7 @@ export type AgentStatus =
   /** Lyricy isn't enabled on this site. */
   | 'unsupported';
 
-interface Anchor {
-  positionMs: number;
-  playing: boolean;
-  rate: number;
-  ad: boolean;
-}
+type Anchor = PlaybackSnapshot;
 
 function matchesPattern(url: string, pattern: string): boolean {
   const m = pattern.match(/^\*:\/\/(\*\.)?([^/]+)\/\*$/);
@@ -53,23 +49,7 @@ export function useAgent() {
   const portRef = useRef<ReturnType<typeof browser.tabs.connect> | null>(null);
   const anchorRef = useRef<Anchor | null>(null);
   const waitersRef = useRef(new Map<string, (c: CaptionData | null) => void>());
-  const clockRef = useRef(
-    new SyncClock(
-      () => {
-        const a = anchorRef.current;
-        return a
-          ? {
-              currentTime: a.positionMs / 1000,
-              paused: !a.playing,
-              seeking: false,
-              readyState: 4,
-              playbackRate: a.rate,
-            }
-          : null;
-      },
-      () => anchorRef.current?.ad ?? false,
-    ),
-  );
+  const clockRef = useRef(new TimestampClock(() => anchorRef.current));
 
   const connect = useCallback(async (force = false) => {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });

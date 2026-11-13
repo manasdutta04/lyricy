@@ -7,8 +7,8 @@ import { findActiveIndex } from '@/core/sync/active-line';
 
 /** Active line sits this far down the viewport (Apple keeps it in the upper third). */
 const ANCHOR = 0.3;
-/** Switch lines slightly early so the scroll animation lands on the beat. */
-const LEAD_MS = 120;
+/** Switch lines a little early so the highlight is fully visible as the singer arrives. */
+const LEAD_MS = 280;
 /** Per-line delay for the ripple as lines below the active one catch up. */
 const RIPPLE_MS = 35;
 const MAX_RIPPLE_STEPS = 8;
