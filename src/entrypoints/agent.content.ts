@@ -35,15 +35,21 @@ const text = (root: ParentNode, selector: string) =>
   root.querySelector(selector)?.textContent?.trim() ?? '';
 
 /** YouTube's "Music in this video" card (song, artist, album), if the page shows one. */
+/** People cards use the same component ("A. R. Ameen · Indian playback singer"). */
+const PERSON_DESCRIPTION =
+  /\b(singer|actor|actress|composer|musician|rapper|lyricist|producer|director|songwriter|band|group|dancer|comedian|youtuber|personality)\b/i;
+
 function readMusicCard(): { title: string; artist: string; album?: string } | undefined {
-  const card =
-    document.querySelector('ytd-watch-metadata yt-video-attribute-view-model') ??
-    document.querySelector('yt-video-attribute-view-model');
-  if (!card) return undefined;
-  const title = text(card, '.ytVideoAttributeViewModelTitle');
-  const artist = text(card, '.ytVideoAttributeViewModelSubtitle');
-  const album = text(card, '.ytVideoAttributeViewModelSecondarySubtitle');
-  return title && artist ? { title, artist, album: album || undefined } : undefined;
+  // Only song cards have an album line; people/places cards don't.
+  for (const card of document.querySelectorAll('yt-video-attribute-view-model')) {
+    const title = text(card, '.ytVideoAttributeViewModelTitle');
+    const artist = text(card, '.ytVideoAttributeViewModelSubtitle');
+    const album = text(card, '.ytVideoAttributeViewModelSecondarySubtitle');
+    if (title && artist && album && !PERSON_DESCRIPTION.test(artist)) {
+      return { title, artist, album };
+    }
+  }
+  return undefined;
 }
 
 function enrich(snapshot: PageSnapshot): PageSnapshot {
