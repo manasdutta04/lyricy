@@ -27,6 +27,16 @@ interface Table {
   digitZero: number;
   /** Whole-word overrides for very common words with fixed Hinglish spellings. */
   words: Record<string, string>;
+  /** Sound of the implicit vowel: "a" in Hindi/Punjabi, "o" in Bengali (মন → mon). */
+  inherent?: string;
+  /** Write long vowels short, as Bengali is usually romanized (আমার → amar, not aamaar). */
+  shortVowels?: boolean;
+  /** Sign written as "ng" (Bengali anusvara ং: বাংলা → bangla). */
+  ngSign?: string;
+  /** Letters that never carry a vowel (Bengali khanda ta ৎ). */
+  standalone?: Record<string, string>;
+  /** Consonant pronounced "y" after a virama (Bengali য-phala). */
+  yaPhala?: string;
 }
 
 const DEVANAGARI: Table = {
@@ -212,6 +222,107 @@ const GURMUKHI: Table = {
   words: { ਹੈ: 'hai', ਮੈਂ: 'main', ਤੂੰ: 'tu', ਨਹੀਂ: 'nahi', ਵੇ: 've', ਨੀ: 'ni' },
 };
 
+const BENGALI: Table = {
+  vowels: {
+    অ: 'o',
+    আ: 'a',
+    ই: 'i',
+    ঈ: 'i',
+    উ: 'u',
+    ঊ: 'u',
+    ঋ: 'ri',
+    এ: 'e',
+    ঐ: 'oi',
+    ও: 'o',
+    ঔ: 'ou',
+  },
+  matras: {
+    'া': 'a',
+    'ি': 'i',
+    'ী': 'i',
+    'ু': 'u',
+    'ূ': 'u',
+    'ৃ': 'ri',
+    'ে': 'e',
+    'ৈ': 'oi',
+    'ো': 'o',
+    'ৌ': 'ou',
+  },
+  consonants: {
+    ক: 'k',
+    খ: 'kh',
+    গ: 'g',
+    ঘ: 'gh',
+    ঙ: 'ng',
+    চ: 'ch',
+    ছ: 'chh',
+    জ: 'j',
+    ঝ: 'jh',
+    ঞ: 'n',
+    ট: 't',
+    ঠ: 'th',
+    ড: 'd',
+    ঢ: 'dh',
+    ণ: 'n',
+    ত: 't',
+    থ: 'th',
+    দ: 'd',
+    ধ: 'dh',
+    ন: 'n',
+    প: 'p',
+    ফ: 'ph',
+    ব: 'b',
+    ভ: 'bh',
+    ম: 'm',
+    য: 'j',
+    র: 'r',
+    ল: 'l',
+    শ: 'sh',
+    ষ: 'sh',
+    স: 's',
+    হ: 'h',
+  },
+  nukta: { ড: 'r', ঢ: 'rh', য: 'y' },
+  composed: { ড়: 'r', ঢ়: 'rh', য়: 'y' },
+  virama: '্',
+  nuktaSign: '়',
+  nasals: 'ঁ',
+  visarga: 'ঃ',
+  digitZero: 0x09e6,
+  inherent: 'o',
+  shortVowels: true,
+  ngSign: 'ং',
+  standalone: { ৎ: 't' },
+  yaPhala: 'য',
+  words: {
+    আমি: 'ami',
+    তুমি: 'tumi',
+    আমার: 'amar',
+    তোমার: 'tomar',
+    তোমাকে: 'tomake',
+    আমাকে: 'amake',
+    ভালোবাসি: 'bhalobashi',
+    ভালবাসি: 'bhalobashi',
+    ভালোবাসা: 'bhalobasha',
+    না: 'na',
+    কি: 'ki',
+    কী: 'ki',
+    কেন: 'keno',
+    এই: 'ei',
+    সে: 'she',
+    হয়: 'hoy',
+    আর: 'ar',
+    মন: 'mon',
+    ও: 'o',
+    আছে: 'ache',
+    আছো: 'acho',
+    হবে: 'hobe',
+    যে: 'je',
+    শুধু: 'shudhu',
+    আকাশ: 'akash',
+  },
+};
+
 const INHERENT = 'INHERENT';
 type VowelSlot = typeof INHERENT | string | null; // null = vowel killed (virama / deleted)
 
@@ -224,6 +335,8 @@ interface Unit {
   double: boolean;
   /** Schwa removed by deletion rules (not by an explicit virama). */
   deleted?: boolean;
+  /** Followed by an "ng" sign (Bengali ং). */
+  ng?: boolean;
 }
 
 function parseWord(word: string, t: Table): Unit[] {
@@ -235,11 +348,25 @@ function parseWord(word: string, t: Table): Unit[] {
     const ch = chars[i] ?? '';
     const next = chars[i + 1];
 
+    if (t.standalone?.[ch] !== undefined) {
+      units.push({
+        kind: 'X',
+        latin: t.standalone[ch] ?? '',
+        vowel: null,
+        nasal: false,
+        double: false,
+      });
+      continue;
+    }
+
     if (t.composed[ch] !== undefined || t.consonants[ch] !== undefined) {
       let latin = t.composed[ch] ?? t.consonants[ch] ?? '';
       if (next === t.nuktaSign) {
         latin = t.nukta[ch] ?? latin;
         i++;
+      } else if (ch === t.yaPhala) {
+        const prevUnit = units[units.length - 1];
+        if (prevUnit?.kind === 'C' && prevUnit.vowel === null) latin = 'y';
       }
       const unit: Unit = { kind: 'C', latin, vowel: INHERENT, nasal: false, double: pendingDouble };
       pendingDouble = false;
@@ -284,6 +411,10 @@ function parseWord(word: string, t: Table): Unit[] {
     }
 
     const last = units[units.length - 1];
+    if (ch === t.ngSign) {
+      if (last) last.ng = true;
+      continue;
+    }
     if (t.nasals.includes(ch)) {
       if (last) last.nasal = true;
       continue;
@@ -323,7 +454,13 @@ function deleteSchwas(units: Unit[]): void {
   const consonantCount = units.filter((u) => u.kind === 'C').length;
   const last = units[units.length - 1];
   // Word-final schwa: "दिल" → dil. Keep it in one-letter words ("न" → na).
-  if (last?.kind === 'C' && last.vowel === INHERENT && consonantCount > 1 && !last.nasal) {
+  if (
+    last?.kind === 'C' &&
+    last.vowel === INHERENT &&
+    consonantCount > 1 &&
+    !last.nasal &&
+    !last.ng
+  ) {
     last.vowel = null;
     last.deleted = true;
   }
@@ -332,8 +469,8 @@ function deleteSchwas(units: Unit[]): void {
     const u = units[k];
     const prev = units[k - 1];
     const next = units[k + 1];
-    if (u?.kind !== 'C' || u.vowel !== INHERENT || u.nasal) continue;
-    if (!hasVowel(prev) || prev?.nasal) continue; // avoid 3-consonant clusters (zindagi)
+    if (u?.kind !== 'C' || u.vowel !== INHERENT || u.nasal || u.ng) continue;
+    if (!hasVowel(prev) || prev?.nasal || prev?.ng) continue; // avoid 3-consonant clusters (zindagi)
     if (next?.kind !== 'C' || next.vowel === null) continue;
     u.vowel = null;
     u.deleted = true;
@@ -342,6 +479,7 @@ function deleteSchwas(units: Unit[]): void {
 
 function matraLatin(matra: string, t: Table, isFinal: boolean, nasal: boolean): string {
   const base = t.matras[matra] ?? '';
+  if (t.shortVowels) return base;
   if (base === 'aa') return isFinal && !nasal ? 'a' : 'aa';
   if (base === 'ee') return isFinal ? 'i' : 'ee';
   if (base === 'oo') return isFinal && !nasal ? 'u' : 'oo';
@@ -360,8 +498,9 @@ function render(units: Unit[], t: Table): string {
     if (u.kind === 'C') {
       piece = u.double ? u.latin.charAt(0) + u.latin : u.latin;
       if (u.vowel === INHERENT) {
+        const inherent = t.inherent ?? 'a';
         // Hinglish "eh": पहले → pehle, रहना → rehna.
-        piece += next?.latin === 'h' && next.deleted ? 'e' : 'a';
+        piece += inherent === 'a' && next?.latin === 'h' && next.deleted ? 'e' : inherent;
       } else if (u.vowel) {
         piece += matraLatin(u.vowel, t, isFinal, u.nasal);
       }
@@ -375,7 +514,9 @@ function render(units: Unit[], t: Table): string {
       piece = u.latin;
     }
 
-    if (u.nasal && u.kind !== 'X') {
+    if (u.ng) {
+      piece += 'ng';
+    } else if (u.nasal && u.kind !== 'X') {
       const following = next?.latin ?? '';
       piece += /^[pbm]/.test(following) ? 'm' : 'n';
     }
@@ -390,6 +531,7 @@ function tableFor(word: string): Table | null {
     const c = ch.codePointAt(0) ?? 0;
     if (c >= 0x0900 && c <= 0x097f) return DEVANAGARI;
     if (c >= 0x0a00 && c <= 0x0a7f) return GURMUKHI;
+    if (c >= 0x0980 && c <= 0x09ff) return BENGALI;
   }
   return null;
 }
@@ -405,7 +547,7 @@ export function transliterateIndicWord(word: string): string {
   return render(units, t);
 }
 
-const INDIC_RUN = /[ऀ-ॿ਀-੿]+/g;
+const INDIC_RUN = /[ऀ-ॿঀ-৿਀-੿]+/g;
 
 /** Transliterates every Devanagari/Gurmukhi run in `text`, leaving the rest alone. */
 export function transliterateIndic(text: string): string {

@@ -2,6 +2,7 @@ export type Script =
   | 'latin'
   | 'devanagari'
   | 'gurmukhi'
+  | 'bengali'
   | 'hangul'
   | 'japanese'
   | 'han'
@@ -12,6 +13,7 @@ const PATTERNS = {
   latin: /[A-Za-zÀ-ɏ]/g,
   devanagari: /[ऀ-ॿ]/g,
   gurmukhi: /[਀-੿]/g,
+  bengali: /[ঀ-৿]/g,
   hangul: /[가-힯ᄀ-ᇿ㄰-㆏]/g,
   kana: /[぀-ヿㇰ-ㇿ]/g,
   han: /[㐀-䶿一-鿿豈-﫿]/g,
@@ -31,6 +33,7 @@ export function dominantScript(text: string): Script {
     ['latin', count(text, PATTERNS.latin)],
     ['devanagari', count(text, PATTERNS.devanagari)],
     ['gurmukhi', count(text, PATTERNS.gurmukhi)],
+    ['bengali', count(text, PATTERNS.bengali)],
     ['hangul', count(text, PATTERNS.hangul)],
     // Any kana means Japanese (kanji included); kanji alone means Chinese.
     [kana > 0 ? 'japanese' : 'han', kana + han],

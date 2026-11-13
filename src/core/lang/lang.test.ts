@@ -33,6 +33,19 @@ describe('transliterateIndic (Hinglish)', () => {
     expect(transliterateIndic('ਪਿਆਰ')).toBe('piaar');
   });
 
+  it.each([
+    ['আমি তোমাকে ভালোবাসি', 'ami tomake bhalobashi'],
+    ['আমার সোনার বাংলা', 'amar sonar bangla'],
+    ['কথা', 'kotha'],
+    ['জীবন', 'jibon'],
+    ['করলাম', 'korlam'],
+    ['মনে পড়ে', 'mone pore'],
+    ['চোখের জল', 'chokher jol'],
+    ['সত্যি', 'sotyi'],
+  ])('Bengali %s → %s', (input, expected) => {
+    expect(transliterateIndic(input)).toBe(expected);
+  });
+
   it('leaves Latin text alone', () => {
     expect(transliterateIndic('Tu hi meri शब है')).toBe('Tu hi meri shab hai');
   });
@@ -69,6 +82,8 @@ describe('dominantScript', () => {
     expect(dominantScript('無敵の笑顔で荒らすメディア')).toBe('japanese');
     expect(dominantScript('我爱你')).toBe('han');
     expect(dominantScript('사랑해요')).toBe('hangul');
+    expect(dominantScript('আমার সোনার বাংলা')).toBe('bengali');
+    expect(romanizeLine('আমার সোনার বাংলা')).toBe('Amar sonar bangla');
     expect(isLatin('Señorita, I love it')).toBe(true);
   });
 });
